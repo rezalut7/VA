@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: openfoodfacts-proxy
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: APP_USER_AGENT
+        value: FitnessPlatformPrototype/1.0 (contact@example.com)
