@@ -1,0 +1,6 @@
+# Copy this file to .env and keep the real one out of git (already in .gitignore).
+# These specific values are safe to expose in the browser — access is controlled
+# by Row Level Security policies in the database, not by keeping this key secret.
+
+VITE_SUPABASE_URL=https://lbmjfiavwsujczzrpesd.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxibWpmaWF2d3N1amN6enJwZXNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NDMxODcsImV4cCI6MjEwMjAxOTE4N30.SWM62PzMsFSJyEWv1c2trgBPvUAx6-BiqIvBJnpYczQ
