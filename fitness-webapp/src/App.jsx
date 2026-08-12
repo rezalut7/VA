@@ -4,10 +4,12 @@ import {
   Users, Sparkles,
 } from "lucide-react";
 import "./App.css";
+import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
   fetchTrainers, fetchTrainerByAuthId, fetchClientsForTrainer,
   fetchClientByAuthId, createClientProfile, activateSubscription, completeOnboarding,
+  fetchWorkoutsForClient, createWorkout, toggleExerciseDone, saveWorkoutSession,
 } from "./lib/api";
 
 const PLANS = [
@@ -404,7 +406,35 @@ function OnboardingForm({ client, onDone }) {
 
 function ClientHome({ client, onLogout }) {
   const [tab, setTab] = useState("today");
+  const [workouts, setWorkouts] = useState([]);
+  const [loadingWorkouts, setLoadingWorkouts] = useState(true);
+  const [activeSession, setActiveSession] = useState(null);
   const plan = PLANS.find((p) => p.id === client.plan);
+
+  const loadWorkouts = () => {
+    setLoadingWorkouts(true);
+    fetchWorkoutsForClient(client.id).then((w) => { setWorkouts(w); setLoadingWorkouts(false); });
+  };
+
+  useEffect(() => { loadWorkouts(); }, [client.id]);
+
+  const handleToggleExercise = async (exerciseId, currentDone) => {
+    setWorkouts((prev) => prev.map((w) => ({
+      ...w,
+      workout_exercises: w.workout_exercises.map((e) => (e.id === exerciseId ? { ...e, done: !currentDone } : e)),
+    })));
+    await toggleExerciseDone(exerciseId, !currentDone);
+  };
+
+  const handleFinishSession = async (payload) => {
+    await saveWorkoutSession(client.id, payload);
+    setActiveSession(null);
+    loadWorkouts();
+  };
+
+  if (activeSession) {
+    return <WorkoutSession workout={activeSession} onExit={() => setActiveSession(null)} onFinish={handleFinishSession} />;
+  }
 
   const navItems = [
     { key: "today", label: "Сегодня", icon: Dumbbell },
@@ -419,7 +449,35 @@ function ClientHome({ client, onLogout }) {
 
       <div className="pt-2 pb-6">
         {tab === "today" && (
-          <ComingSoonCard icon={Dumbbell} title="Тренировки скоро здесь" text="Задания от тренера и режим проведения тренировки появятся на следующем шаге." />
+          <div className="px-4 space-y-3">
+            {loadingWorkouts ? (
+              <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
+            ) : workouts.length === 0 ? (
+              <ComingSoonCard icon={Dumbbell} title="Заданий пока нет" text="Тренер ещё не назначил вам тренировку." />
+            ) : (
+              workouts.map((w) => (
+                <div key={w.id} className="fp-card p-4">
+                  <div className="font-semibold mb-3">{w.title}</div>
+                  <ul className="space-y-2.5 mb-3">
+                    {w.workout_exercises.map((e) => (
+                      <li key={e.id} className="flex items-center gap-3">
+                        <div className={`fp-checkbox ${e.done ? "done" : ""}`} onClick={() => handleToggleExercise(e.id, e.done)}>
+                          {e.done && <CheckCircle2 size={16} color="#fff" />}
+                        </div>
+                        <div>
+                          <div style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? "var(--ink-soft)" : "var(--ink)" }}>{e.name}</div>
+                          <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(e.sets)}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <button className="fp-btn fp-btn-accent w-full py-2.5" onClick={() => setActiveSession(w)}>
+                    Начать тренировку
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         )}
         {tab === "nutrition" && (
           <ComingSoonCard icon={Apple} title="Дневник питания скоро здесь" text="Поиск продуктов, порции и калории по приёмам пищи подключим следующим шагом." />
@@ -448,7 +506,82 @@ function ClientHome({ client, onLogout }) {
   );
 }
 
+function TrainerClientDetail({ client, onBack }) {
+  const [workouts, setWorkouts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAssign, setShowAssign] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    fetchWorkoutsForClient(client.id).then((w) => { setWorkouts(w); setLoading(false); });
+  };
+
+  useEffect(() => { load(); }, [client.id]);
+
+  const handleAssign = async (title, items) => {
+    await createWorkout(client.id, title, items);
+    setShowAssign(false);
+    load();
+  };
+
+  return (
+    <div className="min-h-screen px-4 py-6 max-w-lg mx-auto">
+      <button onClick={onBack} className="flex items-center gap-1 text-sm mb-4" style={{ color: "var(--ink-soft)" }}>
+        <ChevronLeft size={16} /> К списку клиентов
+      </button>
+      <h2 className="fp-display text-2xl font-semibold mb-1">{client.name}</h2>
+      <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)", marginBottom: 16 }}>
+        {PLANS.find((p) => p.id === client.plan)?.name}
+      </Chip>
+
+      {showAssign ? (
+        <AssignWorkoutForm onAssign={handleAssign} onCancel={() => setShowAssign(false)} />
+      ) : (
+        <button className="fp-btn fp-btn-accent px-4 py-2.5 mb-5 flex items-center gap-2" onClick={() => setShowAssign(true)}>
+          <Dumbbell size={15} /> Назначить тренировку
+        </button>
+      )}
+
+      {loading ? (
+        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
+      ) : workouts.length === 0 && !showAssign ? (
+        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Заданий пока нет.</p>
+      ) : (
+        <div className="space-y-3">
+          {workouts.map((w) => {
+            const doneCount = w.workout_exercises.filter((e) => e.done).length;
+            return (
+              <div key={w.id} className="fp-card p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-semibold">{w.title}</div>
+                  <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>{doneCount}/{w.workout_exercises.length}</Chip>
+                </div>
+                <ul className="text-sm space-y-1">
+                  {w.workout_exercises.map((e) => (
+                    <li key={e.id} className="flex items-center gap-2">
+                      {e.done ? <CheckCircle2 size={14} color="var(--accent-2)" /> : <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid var(--line)", display: "inline-block" }} />}
+                      <span style={{ color: e.done ? "var(--ink-soft)" : "var(--ink)", textDecoration: e.done ? "line-through" : "none" }}>
+                        {e.name} — {formatSets(e.sets)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TrainerHome({ trainer, clients, onLogout }) {
+  const [selectedClient, setSelectedClient] = useState(null);
+
+  if (selectedClient) {
+    return <TrainerClientDetail client={selectedClient} onBack={() => setSelectedClient(null)} />;
+  }
+
   return (
     <div className="min-h-screen">
       <PageHeader eyebrow="ТРЕНЕР" title={trainer.name} subtitle={trainer.spec} onLogout={onLogout} />
@@ -461,12 +594,12 @@ function TrainerHome({ trainer, clients, onLogout }) {
         ) : (
           <div className="space-y-2">
             {clients.map((c) => (
-              <div key={c.id} className="fp-card p-3 flex items-center justify-between">
+              <button key={c.id} onClick={() => setSelectedClient(c)} className="fp-card p-3 flex items-center justify-between w-full text-left">
                 <span className="text-sm font-medium">{c.name}</span>
                 <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>
                   {PLANS.find((p) => p.id === c.plan)?.name}
                 </Chip>
-              </div>
+              </button>
             ))}
           </div>
         )}
