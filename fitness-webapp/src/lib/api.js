@@ -111,3 +111,73 @@ export async function completeOnboarding(clientId, onboarding) {
 export async function touchClient(clientId) {
   await supabase.from("clients").update({ last_active_at: new Date().toISOString() }).eq("id", clientId);
 }
+
+/* ------------------------------- WORKOUTS ------------------------------- */
+
+export async function fetchWorkoutsForClient(clientId) {
+  const { data, error } = await supabase
+    .from("workouts")
+    .select("*, workout_exercises(*)")
+    .eq("client_id", clientId)
+    .order("assigned_date", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((w) => ({
+    ...w,
+    workout_exercises: [...(w.workout_exercises || [])].sort((a, b) => a.position - b.position),
+  }));
+}
+
+export async function createWorkout(clientId, title, items) {
+  const { data: workout, error } = await supabase
+    .from("workouts")
+    .insert({ client_id: clientId, title })
+    .select()
+    .single();
+  if (error) throw error;
+
+  const rows = items.map((it, i) => ({
+    workout_id: workout.id,
+    name: it.name,
+    sets: it.sets,
+    position: i,
+  }));
+  const { error: exError } = await supabase.from("workout_exercises").insert(rows);
+  if (exError) throw exError;
+
+  await touchClient(clientId);
+  return workout;
+}
+
+export async function toggleExerciseDone(exerciseId, done) {
+  const { error } = await supabase.from("workout_exercises").update({ done }).eq("id", exerciseId);
+  if (error) throw error;
+}
+
+export async function saveWorkoutSession(clientId, payload) {
+  const { error } = await supabase.from("workout_sessions").insert({
+    client_id: clientId,
+    workout_id: payload.workoutId,
+    title: payload.title,
+    started_at: new Date(payload.startedAt).toISOString(),
+    finished_at: new Date(payload.finishedAt).toISOString(),
+    duration_sec: payload.durationSec,
+    exercises: payload.exercises,
+  });
+  if (error) throw error;
+
+  await Promise.all(
+    payload.exercises.map((ex) => supabase.from("workout_exercises").update({ done: ex.done }).eq("id", ex.id))
+  );
+  await touchClient(clientId);
+}
+
+export async function fetchSessionsForClient(clientId) {
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("finished_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
