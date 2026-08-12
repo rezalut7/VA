@@ -1,15 +1,14 @@
 import { FOOD_DB } from "../data/foodDb";
 
 /* ------------------------- FOOD PROVIDER (live + fallback) -------------------------
- * Tries the free, keyless Open Food Facts API first (works directly from the browser
- * since this is now a real deployed site, not a sandboxed preview). Falls back to the
- * local FOOD_DB mock if the live call fails for any reason (offline, no CORS on some
- * endpoints, no data for that product), so the app never breaks either way.
+ * Tries the free, keyless Open Food Facts search first. Falls back to the local
+ * FOOD_DB mock if the live call fails for any reason, so the app never breaks.
  *
- * If live search turns out unreliable in practice, swap the two "LIVE SOURCE" blocks
- * below to call your deployed openfoodfacts-proxy instead:
- *   fetch(`https://your-proxy.example.com/api/food/search?q=${encodeURIComponent(q)}`)
- *   fetch(`https://your-proxy.example.com/api/food/${encodeURIComponent(foodId)}`)
+ * IMPORTANT: search uses Search-a-licious (search.openfoodfacts.org), NOT
+ * world.openfoodfacts.org/api/v2/search — the v2 endpoint only does structured
+ * tag/filter search (categories, brands...), it does NOT do full-text search by
+ * product name. Search-a-licious is OFF's dedicated full-text search service.
+ * Product detail lookups by barcode still use the regular v2 product endpoint.
  * ------------------------------------------------------------------------------- */
 
 export async function searchFoods(query) {
@@ -17,16 +16,17 @@ export async function searchFoods(query) {
   if (!q) return [];
 
   try {
-    const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(q)}&page_size=8&fields=code,product_name,product_name_ru`;
+    const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(q)}&page_size=8`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`status ${res.status}`);
     const data = await res.json();
-    const products = (data.products || [])
-      .map((p) => ({ id: p.code, name: p.product_name_ru || p.product_name }))
+    const hits = data.hits || data.products || [];
+    const products = hits
+      .map((p) => ({ id: p.code, name: p.product_name_ru || p.product_name || p.product_name_en }))
       .filter((p) => p.id && p.name);
     if (products.length > 0) return products;
   } catch (e) {
-    // network error / CORS block / OFF is down — fall through to the mock
+    // network error / CORS block / service down — fall through to the mock
   }
 
   return searchFoodsMock(q);
