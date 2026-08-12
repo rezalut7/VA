@@ -181,3 +181,40 @@ export async function fetchSessionsForClient(clientId) {
   return data || [];
 }
 
+/* ------------------------------- NUTRITION ------------------------------- */
+
+export async function fetchNutritionForDate(clientId, date) {
+  const { data, error } = await supabase
+    .from("nutrition_entries")
+    .select("*")
+    .eq("client_id", clientId)
+    .eq("entry_date", date)
+    .order("created_at");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addNutritionEntry(clientId, date, entry) {
+  const { error } = await supabase.from("nutrition_entries").insert({
+    client_id: clientId,
+    entry_date: date,
+    meal: entry.meal,
+    food_id: entry.foodId,
+    name: entry.name,
+    serving_label: entry.servingLabel,
+    qty: entry.qty,
+    kcal: entry.kcal,
+    protein: entry.protein,
+    carbs: entry.carbs,
+    fat: entry.fat,
+  });
+  if (error) throw error;
+  await touchClient(clientId);
+}
+
+export async function removeNutritionEntry(entryId) {
+  const { error } = await supabase.from("nutrition_entries").delete().eq("id", entryId);
+  if (error) throw error;
+}
+
+

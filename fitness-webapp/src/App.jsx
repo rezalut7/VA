@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
+import { NutritionTab } from "./components/Nutrition";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
   fetchTrainers, fetchTrainerByAuthId, fetchClientsForTrainer,
@@ -479,9 +480,7 @@ function ClientHome({ client, onLogout }) {
             )}
           </div>
         )}
-        {tab === "nutrition" && (
-          <ComingSoonCard icon={Apple} title="Дневник питания скоро здесь" text="Поиск продуктов, порции и калории по приёмам пищи подключим следующим шагом." />
-        )}
+        {tab === "nutrition" && <NutritionTab client={client} />}
         {tab === "progress" && (
           <ComingSoonCard icon={TrendingUp} title="Прогресс скоро здесь" text="Чек-ины, замеры и графики появятся на следующем шаге." />
         )}
