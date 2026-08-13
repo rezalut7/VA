@@ -445,3 +445,44 @@ export async function fetchNutritionLoggingDays(clientId, sinceDate) {
   if (error) throw error;
   return new Set((data || []).map((d) => d.entry_date)).size;
 }
+
+/* ------------------------------ ШАБЛОНЫ ТРЕНИРОВОК ------------------------------ */
+
+export async function fetchTemplates(trainerId) {
+  const { data, error } = await supabase
+    .from("workout_templates")
+    .select("*, workout_template_exercises(*)")
+    .eq("trainer_id", trainerId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((t) => ({
+    ...t,
+    exercises: [...(t.workout_template_exercises || [])].sort((a, b) => a.position - b.position),
+  }));
+}
+
+export async function createTemplate(trainerId, title, items) {
+  const { data: template, error } = await supabase
+    .from("workout_templates")
+    .insert({ trainer_id: trainerId, title })
+    .select()
+    .single();
+  if (error) throw error;
+  const rows = items.map((it, i) => ({ template_id: template.id, name: it.name, sets: it.sets, position: i }));
+  const { error: exError } = await supabase.from("workout_template_exercises").insert(rows);
+  if (exError) throw exError;
+  return template;
+}
+
+export async function deleteTemplate(templateId) {
+  const { error } = await supabase.from("workout_templates").delete().eq("id", templateId);
+  if (error) throw error;
+}
+
+export async function assignTemplateToClient(clientId, template, titleOverride) {
+  return createWorkout(
+    clientId,
+    titleOverride || template.title,
+    template.exercises.map((e) => ({ name: e.name, sets: e.sets }))
+  );
+}

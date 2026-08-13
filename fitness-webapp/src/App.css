@@ -18,6 +18,11 @@
 
 html, body, #root {
   min-height: 100%;
+  overscroll-behavior-y: none;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -25,6 +30,15 @@ body {
   background: var(--bg);
   color: var(--ink);
   margin: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+button, a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .fp-display {
@@ -101,9 +115,9 @@ body {
 input.fp-input, select.fp-input, textarea.fp-input {
   border: 1.5px solid var(--line);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 10px 10px;
   font-family: 'Inter', sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   width: 100%;
   background: #fff;
   color: var(--ink);
@@ -124,7 +138,8 @@ input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {
   background: var(--surface);
   border-top: 1px solid var(--line);
   display: flex;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  box-shadow: 0 -2px 12px rgba(22, 32, 42, 0.06);
 }
 
 .fp-bottom-nav-item {
@@ -133,8 +148,9 @@ input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 9px 4px 8px;
+  gap: 4px;
+  min-height: 54px;
+  padding: 10px 4px 6px;
   background: none;
   border: none;
   cursor: pointer;
@@ -150,7 +166,7 @@ input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {
 }
 
 .fp-page-with-nav {
-  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0));
+  padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
 }
 
 .fp-sticky-header {

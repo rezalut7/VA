@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
-  Users, Sparkles, MessageCircle, LayoutGrid, Bell,
+  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers,
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
 import { NutritionTab, TrainerNutritionPanel } from "./components/Nutrition";
 import { ChatPanel, TrainerInbox } from "./components/Chat";
 import { ProgressTab, TrainerProgressPanel } from "./components/Progress";
+import { TemplateManager, AssignFromTemplate, PeriodizationPanel } from "./components/Templates";
 import { enablePushNotifications, pushSupported } from "./lib/push";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
   fetchTrainers, fetchTrainerByAuthId, fetchClientsForTrainer,
-  fetchClientByAuthId, createClientProfile, activateSubscription, completeOnboarding,
+  fetchClientByAuthId, createClientProfile, activateSubscription, completeOnboarding, updateClientProfile,
   fetchWorkoutsForClient, createWorkout, toggleExerciseDone, saveWorkoutSession,
 } from "./lib/api";
 
@@ -47,6 +48,10 @@ function planPriceLabel(planId, billing) {
 
 const GOAL_OPTIONS = ["Похудение", "Набор массы", "Поддержание формы", "Восстановление после травмы", "Другое"];
 const EXPERIENCE_OPTIONS = ["Новичок", "Средний", "Продвинутый"];
+const DIET_OPTIONS = ["Без ограничений", "Вегетарианство", "Веганство", "Без глютена", "Без лактозы", "Халяль", "Кошер"];
+const OCCUPATION_OPTIONS = ["Сидячая работа", "Активная работа", "Смешанная / на ногах"];
+const EQUIPMENT_OPTIONS = ["Зал", "Дома", "На улице", "Зал + дома"];
+const DAY_OPTIONS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 /* -------------------------------- SHARED UI -------------------------------- */
 
@@ -344,65 +349,184 @@ function SubscribeGate({ client, onPaid }) {
   );
 }
 
+function ChipMultiSelect({ options, values, onToggle, columns = 2 }) {
+  return (
+    <div className="grid gap-2 mb-4" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
+      {options.map((o) => {
+        const active = values.includes(o);
+        return (
+          <button
+            key={o} onClick={() => onToggle(o)} className="fp-card px-3 py-2 text-sm text-left"
+            style={{ borderColor: active ? "var(--accent)" : "var(--line)", borderWidth: active ? 1.5 : 1, background: active ? "var(--bg)" : "#fff" }}
+          >{o}</button>
+        );
+      })}
+    </div>
+  );
+}
+
 function OnboardingForm({ client, onDone }) {
+  const [step, setStep] = useState(0);
+  const [busy, setBusy] = useState(false);
+
   const [goal, setGoal] = useState(GOAL_OPTIONS[0]);
   const [experience, setExperience] = useState(EXPERIENCE_OPTIONS[0]);
-  const [injuries, setInjuries] = useState("");
+  const [targetWeight, setTargetWeight] = useState("");
+
+  const [gender, setGender] = useState("male");
+  const [age, setAge] = useState("");
   const [height, setHeight] = useState("");
   const [startWeight, setStartWeight] = useState("");
-  const [busy, setBusy] = useState(false);
+
+  const [injuries, setInjuries] = useState("");
+  const [chronicDiseases, setChronicDiseases] = useState("");
+  const [allergies, setAllergies] = useState("");
+  const [medications, setMedications] = useState("");
+
+  const [dietaryRestrictions, setDietaryRestrictions] = useState([]);
+  const [dislikedFoods, setDislikedFoods] = useState("");
+
+  const [sleepHours, setSleepHours] = useState("");
+  const [occupationType, setOccupationType] = useState(OCCUPATION_OPTIONS[0]);
+  const [equipmentAccess, setEquipmentAccess] = useState(EQUIPMENT_OPTIONS[0]);
+  const [preferredDays, setPreferredDays] = useState([]);
+
+  const toggleIn = (arr, setArr, value) => {
+    setArr(arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value]);
+  };
+
+  const steps = [
+    { key: "goal", title: "Цель" },
+    { key: "body", title: "О себе" },
+    { key: "health", title: "Здоровье" },
+    { key: "food", title: "Питание" },
+    { key: "lifestyle", title: "Образ жизни" },
+  ];
+  const isLast = step === steps.length - 1;
 
   const submit = async () => {
     setBusy(true);
-    const updated = await completeOnboarding(client.id, {
-      goal, experience, injuries: injuries.trim(),
-      height: height ? Number(height) : null,
-      startWeight: startWeight ? Number(startWeight) : null,
-    });
+    const onboarding = {
+      goal, experience, targetWeight: targetWeight ? Number(targetWeight) : null,
+      height: height ? Number(height) : null, startWeight: startWeight ? Number(startWeight) : null,
+      injuries: injuries.trim(), chronicDiseases: chronicDiseases.trim(),
+      allergies: allergies.trim(), medications: medications.trim(),
+      dietaryRestrictions, dislikedFoods: dislikedFoods.trim(),
+      sleepHours: sleepHours ? Number(sleepHours) : null, occupationType, equipmentAccess, preferredDays,
+    };
+    const [updated] = await Promise.all([
+      completeOnboarding(client.id, onboarding),
+      updateClientProfile(client.id, { gender, age: age ? Number(age) : null }),
+    ]);
     onDone(updated);
   };
 
+  const next = () => (isLast ? submit() : setStep((s) => Math.min(steps.length - 1, s + 1)));
+  const back = () => setStep((s) => Math.max(0, s - 1));
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 py-10">
       <div className="fp-card p-7 w-full max-w-lg">
-        <Chip style={{ background: "var(--ink)", color: "#fff", marginBottom: 12 }}>АНКЕТА</Chip>
-        <h2 className="fp-display text-2xl font-semibold mb-1">Расскажите о себе, {client.name.split(" ")[0]}</h2>
-        <p className="text-sm mb-5" style={{ color: "var(--ink-soft)" }}>Поможет тренеру составить план под вас.</p>
+        <Chip style={{ background: "var(--ink)", color: "#fff", marginBottom: 12 }}>АНКЕТА · ШАГ {step + 1} ИЗ {steps.length}</Chip>
+        <h2 className="fp-display text-2xl font-semibold mb-1">{steps[step].title}</h2>
+        <div className="fp-bar-track mb-5"><div className="fp-bar-fill" style={{ width: `${((step + 1) / steps.length) * 100}%`, background: "var(--accent)" }} /></div>
 
-        <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Главная цель</label>
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          {GOAL_OPTIONS.map((g) => (
-            <button key={g} onClick={() => setGoal(g)} className="fp-card px-3 py-2 text-sm text-left"
-              style={{ borderColor: goal === g ? "var(--accent)" : "var(--line)", borderWidth: goal === g ? 1.5 : 1 }}>{g}</button>
-          ))}
-        </div>
-
-        <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Опыт тренировок</label>
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          {EXPERIENCE_OPTIONS.map((e) => (
-            <button key={e} onClick={() => setExperience(e)} className="fp-card px-3 py-2 text-sm"
-              style={{ borderColor: experience === e ? "var(--accent)" : "var(--line)", borderWidth: experience === e ? 1.5 : 1 }}>{e}</button>
-          ))}
-        </div>
-
-        <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Травмы или ограничения (необязательно)</label>
-        <textarea className="fp-input mb-4" rows={2} value={injuries} onChange={(e) => setInjuries(e.target.value)}
-          placeholder="Оставьте пустым, если ограничений нет" />
-
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        {step === 0 && (
           <div>
-            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Рост, см</label>
-            <input className="fp-input" type="number" value={height} onChange={(e) => setHeight(e.target.value)} />
+            <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Главная цель</label>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {GOAL_OPTIONS.map((g) => (
+                <button key={g} onClick={() => setGoal(g)} className="fp-card px-3 py-2 text-sm text-left"
+                  style={{ borderColor: goal === g ? "var(--accent)" : "var(--line)", borderWidth: goal === g ? 1.5 : 1 }}>{g}</button>
+              ))}
+            </div>
+            <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Опыт тренировок</label>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {EXPERIENCE_OPTIONS.map((e) => (
+                <button key={e} onClick={() => setExperience(e)} className="fp-card px-3 py-2 text-sm"
+                  style={{ borderColor: experience === e ? "var(--accent)" : "var(--line)", borderWidth: experience === e ? 1.5 : 1 }}>{e}</button>
+              ))}
+            </div>
+            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Желаемый вес, кг (необязательно)</label>
+            <input className="fp-input" type="number" value={targetWeight} onChange={(e) => setTargetWeight(e.target.value)} />
           </div>
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Текущий вес, кг</label>
-            <input className="fp-input" type="number" value={startWeight} onChange={(e) => setStartWeight(e.target.value)} />
-          </div>
-        </div>
+        )}
 
-        <button className="fp-btn fp-btn-accent w-full py-2.5 disabled:opacity-50" disabled={busy} onClick={submit}>
-          {busy ? "Сохраняем…" : "Продолжить"}
-        </button>
+        {step === 1 && (
+          <div>
+            <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Пол</label>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button onClick={() => setGender("male")} className="fp-card px-3 py-2 text-sm" style={{ borderColor: gender === "male" ? "var(--accent)" : "var(--line)", borderWidth: gender === "male" ? 1.5 : 1 }}>Мужчина</button>
+              <button onClick={() => setGender("female")} className="fp-card px-3 py-2 text-sm" style={{ borderColor: gender === "female" ? "var(--accent)" : "var(--line)", borderWidth: gender === "female" ? 1.5 : 1 }}>Женщина</button>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mb-2">
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Возраст</label>
+                <input className="fp-input" type="number" value={age} onChange={(e) => setAge(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Рост, см</label>
+                <input className="fp-input" type="number" value={height} onChange={(e) => setHeight(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Вес, кг</label>
+                <input className="fp-input" type="number" value={startWeight} onChange={(e) => setStartWeight(e.target.value)} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div>
+            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Травмы или ограничения</label>
+            <textarea className="fp-input mb-3" rows={2} value={injuries} onChange={(e) => setInjuries(e.target.value)} placeholder="Оставьте пустым, если нет" />
+            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Хронические заболевания</label>
+            <textarea className="fp-input mb-3" rows={2} value={chronicDiseases} onChange={(e) => setChronicDiseases(e.target.value)} placeholder="Оставьте пустым, если нет" />
+            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Аллергии (в т.ч. пищевые)</label>
+            <textarea className="fp-input mb-3" rows={2} value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder="Оставьте пустым, если нет" />
+            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Принимаемые лекарства/добавки</label>
+            <textarea className="fp-input" rows={2} value={medications} onChange={(e) => setMedications(e.target.value)} placeholder="Оставьте пустым, если нет" />
+          </div>
+        )}
+
+        {step === 3 && (
+          <div>
+            <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Пищевые ограничения (можно несколько)</label>
+            <ChipMultiSelect options={DIET_OPTIONS} values={dietaryRestrictions} onToggle={(v) => toggleIn(dietaryRestrictions, setDietaryRestrictions, v)} />
+            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Нелюбимые продукты</label>
+            <textarea className="fp-input" rows={2} value={dislikedFoods} onChange={(e) => setDislikedFoods(e.target.value)} placeholder="Что точно не стоит включать в план" />
+          </div>
+        )}
+
+        {step === 4 && (
+          <div>
+            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Сон, часов в сутки</label>
+            <input className="fp-input mb-3" type="number" value={sleepHours} onChange={(e) => setSleepHours(e.target.value)} />
+            <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Характер работы</label>
+            <div className="grid grid-cols-1 gap-2 mb-3">
+              {OCCUPATION_OPTIONS.map((o) => (
+                <button key={o} onClick={() => setOccupationType(o)} className="fp-card px-3 py-2 text-sm text-left"
+                  style={{ borderColor: occupationType === o ? "var(--accent)" : "var(--line)", borderWidth: occupationType === o ? 1.5 : 1 }}>{o}</button>
+              ))}
+            </div>
+            <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Где тренируетесь</label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {EQUIPMENT_OPTIONS.map((o) => (
+                <button key={o} onClick={() => setEquipmentAccess(o)} className="fp-card px-3 py-2 text-sm"
+                  style={{ borderColor: equipmentAccess === o ? "var(--accent)" : "var(--line)", borderWidth: equipmentAccess === o ? 1.5 : 1 }}>{o}</button>
+              ))}
+            </div>
+            <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Удобные дни для тренировок</label>
+            <ChipMultiSelect options={DAY_OPTIONS} values={preferredDays} onToggle={(v) => toggleIn(preferredDays, setPreferredDays, v)} columns={4} />
+          </div>
+        )}
+
+        <div className="flex gap-2 mt-5">
+          {step > 0 && <button className="fp-btn fp-btn-outline flex-1 py-2.5" onClick={back}>Назад</button>}
+          <button className="fp-btn fp-btn-accent flex-1 py-2.5 disabled:opacity-50" disabled={busy} onClick={next}>
+            {busy ? "Сохраняем…" : isLast ? "Завершить" : "Далее"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -553,7 +677,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
   const [tab, setTab] = useState("workouts");
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAssign, setShowAssign] = useState(false);
+  const [assignMode, setAssignMode] = useState(null); // null | 'custom' | 'template'
   const isVip = client.plan === "vip";
 
   const load = () => {
@@ -565,7 +689,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
 
   const handleAssign = async (title, items) => {
     await createWorkout(client.id, title, items);
-    setShowAssign(false);
+    setAssignMode(null);
     load();
   };
 
@@ -582,6 +706,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
       <div className="flex gap-4 mb-5 overflow-x-auto fp-scroll" style={{ borderBottom: "1px solid var(--line)" }}>
         {[
           { key: "workouts", label: "Тренировки" },
+          { key: "periodization", label: "Периодизация" },
           { key: "nutrition", label: "Питание" },
           { key: "progress", label: "Прогресс" },
           ...(isVip ? [{ key: "chat", label: "Чат" }] : []),
@@ -599,21 +724,36 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
         <TrainerNutritionPanel client={client} onClientUpdated={(updated) => updated && setClient(updated)} />
       ) : tab === "progress" ? (
         <TrainerProgressPanel client={client} />
+      ) : tab === "periodization" ? (
+        <PeriodizationPanel client={client} />
       ) : tab === "chat" && isVip ? (
         <ChatPanel clientId={client.id} currentSender={trainer.name} senderRole="trainer" authUserId={trainer.auth_user_id} />
       ) : (
         <>
-          {showAssign ? (
-            <AssignWorkoutForm onAssign={handleAssign} onCancel={() => setShowAssign(false)} />
+          {assignMode === "custom" ? (
+            <AssignWorkoutForm onAssign={handleAssign} onCancel={() => setAssignMode(null)} />
+          ) : assignMode === "template" ? (
+            <div className="fp-card p-4 mb-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold">Выберите шаблон</span>
+                <button onClick={() => setAssignMode(null)} className="text-xs" style={{ color: "var(--ink-soft)" }}>Отмена</button>
+              </div>
+              <AssignFromTemplate trainer={trainer} clientId={client.id} onAssigned={() => { setAssignMode(null); load(); }} />
+            </div>
           ) : (
-            <button className="fp-btn fp-btn-accent px-4 py-2.5 mb-5 flex items-center gap-2" onClick={() => setShowAssign(true)}>
-              <Dumbbell size={15} /> Назначить тренировку
-            </button>
+            <div className="flex gap-2 mb-5">
+              <button className="fp-btn fp-btn-accent px-4 py-2.5 flex-1 flex items-center justify-center gap-2" onClick={() => setAssignMode("custom")}>
+                <Dumbbell size={15} /> Своя тренировка
+              </button>
+              <button className="fp-btn fp-btn-outline px-4 py-2.5 flex-1 flex items-center justify-center gap-2" onClick={() => setAssignMode("template")}>
+                <Copy size={15} /> Из шаблона
+              </button>
+            </div>
           )}
 
           {loading ? (
             <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
-          ) : workouts.length === 0 && !showAssign ? (
+          ) : workouts.length === 0 && !assignMode ? (
             <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Заданий пока нет.</p>
           ) : (
             <div className="space-y-3">
@@ -649,11 +789,23 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
 function TrainerHome({ trainer, clients, onLogout, authUserId }) {
   const [tab, setTab] = useState("overview");
   const [selectedClient, setSelectedClient] = useState(null);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [pushStatus, setPushStatus] = useState(null);
   const vipClients = clients.filter((c) => c.plan === "vip");
 
   if (selectedClient) {
     return <TrainerClientDetail client={selectedClient} trainer={trainer} onBack={() => setSelectedClient(null)} />;
+  }
+
+  if (showTemplates) {
+    return (
+      <div className="min-h-screen py-6">
+        <button onClick={() => setShowTemplates(false)} className="flex items-center gap-1 text-sm mb-4 px-4" style={{ color: "var(--ink-soft)" }}>
+          <ChevronLeft size={16} /> К обзору
+        </button>
+        <TemplateManager trainer={trainer} />
+      </div>
+    );
   }
 
   const handleEnablePush = async () => {
@@ -682,6 +834,13 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
               <div><div className="num">{clients.length}</div><div className="text-xs opacity-70 mt-1">Клиентов</div></div>
               <div><div className="num">{vipClients.length}</div><div className="text-xs opacity-70 mt-1">На VIP</div></div>
             </div>
+            <button onClick={() => setShowTemplates(true)} className="fp-card w-full p-3 mb-5 flex items-center justify-between text-left">
+              <div className="flex items-center gap-2">
+                <Layers size={16} color="var(--accent)" />
+                <span className="text-sm font-medium">Шаблоны тренировок</span>
+              </div>
+              <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Управлять →</span>
+            </button>
             {attentionClients.length > 0 && (
               <div className="mb-5">
                 <div className="text-xs mb-2 font-semibold" style={{ color: "var(--ink-soft)" }}>ТРЕБУЮТ ВНИМАНИЯ</div>
