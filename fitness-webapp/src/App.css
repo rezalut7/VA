@@ -21,6 +21,10 @@ html, body, #root {
   overscroll-behavior-y: none;
 }
 
+#root {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
 html {
   -webkit-text-size-adjust: 100%;
 }

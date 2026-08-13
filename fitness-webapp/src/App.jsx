@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
-  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers,
+  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays,
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
@@ -9,6 +9,8 @@ import { NutritionTab, TrainerNutritionPanel } from "./components/Nutrition";
 import { ChatPanel, TrainerInbox } from "./components/Chat";
 import { ProgressTab, TrainerProgressPanel } from "./components/Progress";
 import { TemplateManager, AssignFromTemplate, PeriodizationPanel } from "./components/Templates";
+import { ExerciseProgressSection, TrainerLeaderboard } from "./components/ExerciseProgress";
+import { MicrocycleManager, AssignMicrocycle } from "./components/Microcycles";
 import { enablePushNotifications, pushSupported } from "./lib/push";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
@@ -592,27 +594,38 @@ function ClientHome({ client, onLogout, authUserId }) {
             ) : workouts.length === 0 ? (
               <ComingSoonCard icon={Dumbbell} title="Заданий пока нет" text="Тренер ещё не назначил вам тренировку." />
             ) : (
-              workouts.map((w) => (
-                <div key={w.id} className="fp-card p-4">
-                  <div className="font-semibold mb-3">{w.title}</div>
-                  <ul className="space-y-2.5 mb-3">
-                    {w.workout_exercises.map((e) => (
-                      <li key={e.id} className="flex items-center gap-3">
-                        <div className={`fp-checkbox ${e.done ? "done" : ""}`} onClick={() => handleToggleExercise(e.id, e.done)}>
-                          {e.done && <CheckCircle2 size={16} color="#fff" />}
-                        </div>
-                        <div>
-                          <div style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? "var(--ink-soft)" : "var(--ink)" }}>{e.name}</div>
-                          <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(e.sets)}</div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <button className="fp-btn fp-btn-accent w-full py-2.5" onClick={() => setActiveSession(w)}>
-                    Начать тренировку
-                  </button>
-                </div>
-              ))
+              workouts.map((w) => {
+                const doneCount = w.workout_exercises.filter((e) => e.done).length;
+                const totalCount = w.workout_exercises.length;
+                const allDone = totalCount > 0 && doneCount === totalCount;
+                return (
+                  <div key={w.id} className="fp-card p-4">
+                    <div className="font-semibold mb-3">{w.title}</div>
+                    <ul className="space-y-2.5 mb-3">
+                      {w.workout_exercises.map((e) => (
+                        <li key={e.id} className="flex items-center gap-3">
+                          <div className={`fp-checkbox ${e.done ? "done" : ""}`} onClick={() => handleToggleExercise(e.id, e.done)}>
+                            {e.done && <CheckCircle2 size={16} color="#fff" />}
+                          </div>
+                          <div>
+                            <div style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? "var(--ink-soft)" : "var(--ink)" }}>{e.name}</div>
+                            <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(e.sets)}</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {allDone ? (
+                      <div className="w-full py-2.5 text-center text-sm font-semibold" style={{ color: "var(--accent-2)" }}>
+                        Тренировка выполнена ✓
+                      </div>
+                    ) : (
+                      <button className="fp-btn fp-btn-accent w-full py-2.5" onClick={() => setActiveSession(w)}>
+                        Начать тренировку
+                      </button>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         )}
@@ -740,13 +753,24 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
               </div>
               <AssignFromTemplate trainer={trainer} clientId={client.id} onAssigned={() => { setAssignMode(null); load(); }} />
             </div>
+          ) : assignMode === "microcycle" ? (
+            <div className="fp-card p-4 mb-5">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold">Выберите микроцикл</span>
+                <button onClick={() => setAssignMode(null)} className="text-xs" style={{ color: "var(--ink-soft)" }}>Отмена</button>
+              </div>
+              <AssignMicrocycle trainer={trainer} clientId={client.id} onAssigned={() => { setAssignMode(null); load(); }} />
+            </div>
           ) : (
-            <div className="flex gap-2 mb-5">
-              <button className="fp-btn fp-btn-accent px-4 py-2.5 flex-1 flex items-center justify-center gap-2" onClick={() => setAssignMode("custom")}>
-                <Dumbbell size={15} /> Своя тренировка
+            <div className="grid grid-cols-3 gap-2 mb-5">
+              <button className="fp-btn fp-btn-accent px-2 py-2.5 flex flex-col items-center justify-center gap-1 text-[11px]" onClick={() => setAssignMode("custom")}>
+                <Dumbbell size={15} /> Своя
               </button>
-              <button className="fp-btn fp-btn-outline px-4 py-2.5 flex-1 flex items-center justify-center gap-2" onClick={() => setAssignMode("template")}>
-                <Copy size={15} /> Из шаблона
+              <button className="fp-btn fp-btn-outline px-2 py-2.5 flex flex-col items-center justify-center gap-1 text-[11px]" onClick={() => setAssignMode("template")}>
+                <Copy size={15} /> Шаблон
+              </button>
+              <button className="fp-btn fp-btn-outline px-2 py-2.5 flex flex-col items-center justify-center gap-1 text-[11px]" onClick={() => setAssignMode("microcycle")}>
+                <CalendarDays size={15} /> Микроцикл
               </button>
             </div>
           )}
@@ -790,6 +814,8 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
   const [tab, setTab] = useState("overview");
   const [selectedClient, setSelectedClient] = useState(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showMicrocycles, setShowMicrocycles] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [pushStatus, setPushStatus] = useState(null);
   const vipClients = clients.filter((c) => c.plan === "vip");
 
@@ -804,6 +830,25 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
           <ChevronLeft size={16} /> К обзору
         </button>
         <TemplateManager trainer={trainer} />
+      </div>
+    );
+  }
+
+  if (showMicrocycles) {
+    return (
+      <div className="min-h-screen py-6">
+        <button onClick={() => setShowMicrocycles(false)} className="flex items-center gap-1 text-sm mb-4 px-4" style={{ color: "var(--ink-soft)" }}>
+          <ChevronLeft size={16} /> К обзору
+        </button>
+        <MicrocycleManager trainer={trainer} />
+      </div>
+    );
+  }
+
+  if (showLeaderboard) {
+    return (
+      <div className="min-h-screen py-6">
+        <TrainerLeaderboard trainer={trainer} clients={clients} onBack={() => setShowLeaderboard(false)} />
       </div>
     );
   }
@@ -834,12 +879,26 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
               <div><div className="num">{clients.length}</div><div className="text-xs opacity-70 mt-1">Клиентов</div></div>
               <div><div className="num">{vipClients.length}</div><div className="text-xs opacity-70 mt-1">На VIP</div></div>
             </div>
-            <button onClick={() => setShowTemplates(true)} className="fp-card w-full p-3 mb-5 flex items-center justify-between text-left">
+            <button onClick={() => setShowTemplates(true)} className="fp-card w-full p-3 mb-3 flex items-center justify-between text-left">
               <div className="flex items-center gap-2">
                 <Layers size={16} color="var(--accent)" />
                 <span className="text-sm font-medium">Шаблоны тренировок</span>
               </div>
               <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Управлять →</span>
+            </button>
+            <button onClick={() => setShowMicrocycles(true)} className="fp-card w-full p-3 mb-3 flex items-center justify-between text-left">
+              <div className="flex items-center gap-2">
+                <CalendarDays size={16} color="var(--accent)" />
+                <span className="text-sm font-medium">Микроциклы</span>
+              </div>
+              <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Управлять →</span>
+            </button>
+            <button onClick={() => setShowLeaderboard(true)} className="fp-card w-full p-3 mb-5 flex items-center justify-between text-left">
+              <div className="flex items-center gap-2">
+                <Trophy size={16} color="var(--accent)" />
+                <span className="text-sm font-medium">Рейтинг по упражнению</span>
+              </div>
+              <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Смотреть →</span>
             </button>
             {attentionClients.length > 0 && (
               <div className="mb-5">

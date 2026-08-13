@@ -5,6 +5,7 @@ import {
   fetchCheckins, addCheckin, uploadCheckinPhoto,
   fetchProgress, fetchWorkoutsForClient, fetchNutritionLoggingDays,
 } from "../lib/api";
+import { ExerciseProgressSection } from "./ExerciseProgress";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function humanDate(iso) {
@@ -317,6 +318,10 @@ export function ProgressTab({ client }) {
           <WeightChart points={insight.weightPoints} />
         </div>
       )}
+
+      <div className="mb-5">
+        <ExerciseProgressSection client={client} />
+      </div>
 
       <CheckinForm clientId={client.id} onAdded={load} />
       <CheckinHistory checkins={insight.checkins} />

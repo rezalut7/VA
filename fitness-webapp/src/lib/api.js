@@ -202,6 +202,8 @@ export async function createWorkout(clientId, title, items) {
     name: it.name,
     sets: it.sets,
     position: i,
+    is_assisted: !!it.isAssisted,
+    periodization_enabled: it.periodizationEnabled !== false,
   }));
   const { error: exError } = await supabase.from("workout_exercises").insert(rows);
   if (exError) throw exError;
@@ -468,7 +470,10 @@ export async function createTemplate(trainerId, title, items) {
     .select()
     .single();
   if (error) throw error;
-  const rows = items.map((it, i) => ({ template_id: template.id, name: it.name, sets: it.sets, position: i }));
+  const rows = items.map((it, i) => ({
+    template_id: template.id, name: it.name, sets: it.sets, position: i,
+    is_assisted: !!it.isAssisted, periodization_enabled: it.periodizationEnabled !== false,
+  }));
   const { error: exError } = await supabase.from("workout_template_exercises").insert(rows);
   if (exError) throw exError;
   return template;
@@ -483,6 +488,86 @@ export async function assignTemplateToClient(clientId, template, titleOverride) 
   return createWorkout(
     clientId,
     titleOverride || template.title,
-    template.exercises.map((e) => ({ name: e.name, sets: e.sets }))
+    template.exercises.map((e) => ({
+      name: e.name, sets: e.sets,
+      isAssisted: e.is_assisted, periodizationEnabled: e.periodization_enabled,
+    }))
   );
+}
+
+/* ------------------------------ ЦЕЛИ ПО УПРАЖНЕНИЯМ ------------------------------ */
+
+export async function fetchExerciseGoals(clientId) {
+  const { data, error } = await supabase
+    .from("exercise_goals")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addExerciseGoal(clientId, exerciseName, metric, targetValue) {
+  const { error } = await supabase.from("exercise_goals").insert({
+    client_id: clientId, exercise_name: exerciseName, metric, target_value: targetValue,
+  });
+  if (error) throw error;
+}
+
+export async function deleteExerciseGoal(goalId) {
+  const { error } = await supabase.from("exercise_goals").delete().eq("id", goalId);
+  if (error) throw error;
+}
+
+/* ------------------------------ МИКРОЦИКЛЫ ------------------------------ */
+
+export async function fetchMicrocycles(trainerId) {
+  const { data, error } = await supabase
+    .from("microcycle_templates")
+    .select("*, microcycle_workouts(*, microcycle_workout_exercises(*))")
+    .eq("trainer_id", trainerId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((m) => ({
+    ...m,
+    workouts: [...(m.microcycle_workouts || [])]
+      .sort((a, b) => a.position - b.position)
+      .map((w) => ({
+        ...w,
+        exercises: [...(w.microcycle_workout_exercises || [])].sort((a, b) => a.position - b.position),
+      })),
+  }));
+}
+
+export async function createMicrocycle(trainerId, title, days) {
+  const { data: microcycle, error } = await supabase
+    .from("microcycle_templates")
+    .insert({ trainer_id: trainerId, title })
+    .select()
+    .single();
+  if (error) throw error;
+
+  for (let i = 0; i < days.length; i++) {
+    const day = days[i];
+    const { data: workout, error: wError } = await supabase
+      .from("microcycle_workouts")
+      .insert({ microcycle_id: microcycle.id, title: day.title, position: i })
+      .select()
+      .single();
+    if (wError) throw wError;
+
+    const rows = day.items.map((it, j) => ({
+      microcycle_workout_id: workout.id, name: it.name, sets: it.sets, position: j,
+      is_assisted: !!it.isAssisted, periodization_enabled: it.periodizationEnabled !== false,
+    }));
+    const { error: exError } = await supabase.from("microcycle_workout_exercises").insert(rows);
+    if (exError) throw exError;
+  }
+
+  return microcycle;
+}
+
+export async function deleteMicrocycle(id) {
+  const { error } = await supabase.from("microcycle_templates").delete().eq("id", id);
+  if (error) throw error;
 }

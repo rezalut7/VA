@@ -3,7 +3,7 @@ import { Trash2, Copy, Layers, TrendingUp, Zap } from "lucide-react";
 import { AssignWorkoutForm, formatSets } from "./Workouts";
 import {
   fetchTemplates, createTemplate, deleteTemplate, assignTemplateToClient,
-  fetchSessionsForClient, fetchWorkoutsForClient,
+  fetchSessionsForClient, fetchWorkoutsForClient, createWorkout,
 } from "../lib/api";
 
 /* ------------------------------ ШАБЛОНЫ ------------------------------ */
@@ -101,7 +101,7 @@ export function AssignFromTemplate({ trainer, clientId, onAssigned }) {
 
 /* ------------------------------ ПЕРИОДИЗАЦИЯ ------------------------------ */
 
-const WEEK_PLAN = [
+export const WEEK_PLAN = [
   { key: "base", label: "Неделя 1 — база", weightMult: 1.0, setsMult: 1, note: "Точка отсчёта — средний рабочий вес за последние тренировки." },
   { key: "build", label: "Неделя 2 — рост объёма", weightMult: 1.05, setsMult: 1, note: "Вес +5%, тот же объём." },
   { key: "peak", label: "Неделя 3 — пик интенсивности", weightMult: 1.1, setsMult: 1, note: "Вес +10% — пиковая нагрузка блока." },
@@ -126,14 +126,21 @@ function exerciseBaseline(exerciseName, sessions) {
   return { avgWeight: weights.reduce((a, b) => a + b, 0) / weights.length, reps, samples: weights.length };
 }
 
+export function effectiveWeightMult(ex, week) {
+  // Ассистируемые (гравитрон/резина): больше вес/сопротивление = легче.
+  // Значит "прогресс" — это СНИЖЕНИЕ веса на неделях роста и ПОВЫШЕНИЕ на разгрузке.
+  return ex.is_assisted ? 1 / week.weightMult : week.weightMult;
+}
+
 function buildWeekExercises(baseWorkout, baselines, week) {
   return baseWorkout.workout_exercises.map((ex) => {
     const baseline = baselines[ex.name];
-    if (!baseline) return { name: ex.name, sets: ex.sets };
+    const passthrough = { name: ex.name, isAssisted: ex.is_assisted, periodizationEnabled: ex.periodization_enabled };
+    if (!baseline || ex.periodization_enabled === false) return { ...passthrough, sets: ex.sets };
     const targetCount = Math.max(1, Math.round(ex.sets.length * week.setsMult));
-    const weight = Math.round(baseline.avgWeight * week.weightMult);
+    const weight = Math.max(0, Math.round(baseline.avgWeight * effectiveWeightMult(ex, week)));
     const sets = Array.from({ length: targetCount }, () => ({ reps: baseline.reps, weight: String(weight) }));
-    return { name: ex.name, sets };
+    return { ...passthrough, sets };
   });
 }
 
@@ -163,12 +170,14 @@ export function PeriodizationPanel({ client }) {
 
   const baselines = {};
   baseWorkout.workout_exercises.forEach((ex) => { baselines[ex.name] = exerciseBaseline(ex.name, relevantSessions); });
-  const hasEnoughData = Object.values(baselines).some((b) => b && b.samples >= 2);
+  const hasEnoughData = baseWorkout.workout_exercises.some(
+    (ex) => ex.periodization_enabled !== false && baselines[ex.name] && baselines[ex.name].samples >= 2
+  );
 
   const handleCreateWeek = async (week) => {
     setCreating(week.key);
     const exercises = buildWeekExercises(baseWorkout, baselines, week);
-    await assignTemplateToClient(client.id, { title: baseWorkout.title, exercises }, `${baseWorkout.title} — ${week.label}`);
+    await createWorkout(client.id, `${baseWorkout.title} — ${week.label}`, exercises);
     setCreated((prev) => ({ ...prev, [week.key]: true }));
     setCreating(null);
   };
@@ -189,13 +198,13 @@ export function PeriodizationPanel({ client }) {
         </div>
       )}
 
-      {relevantSessions.length < 2 ? (
+      {relevantSessions.length < 1 ? (
         <div className="fp-card p-4 mb-4" style={{ background: "var(--bg)" }}>
           <div className="flex items-start gap-2">
             <Zap size={15} color="var(--accent)" style={{ marginTop: 2, flexShrink: 0 }} />
             <p className="text-sm">
-              Пока проведено {relevantSessions.length} {relevantSessions.length === 1 ? "тренировка" : "тренировки"} по «{baseWorkout.title}».
-              Дайте клиенту обкатать план ещё 1–2 недели (минимум 2 законченные тренировки) — тогда здесь появится расчёт весов на следующий 4-недельный блок на основе того, что он реально поднимал.
+              Клиент ещё не завершил ни одной тренировки по «{baseWorkout.title}». Как только пройдёт первая — здесь появится
+              расчёт весов на следующий 4-недельный блок на основе того, что он реально поднимал.
             </p>
           </div>
         </div>
@@ -225,11 +234,18 @@ export function PeriodizationPanel({ client }) {
                 <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>{week.note}</p>
                 <ul className="text-xs space-y-1">
                   {baseWorkout.workout_exercises.map((ex) => {
+                    if (ex.periodization_enabled === false) {
+                      return <li key={ex.id} style={{ color: "var(--ink-soft)" }}>{ex.name} — не участвует в периодизации (вес не меняется)</li>;
+                    }
                     const b = baselines[ex.name];
                     if (!b) return <li key={ex.id} style={{ color: "var(--ink-soft)" }}>{ex.name} — недостаточно данных</li>;
-                    const weight = Math.round(b.avgWeight * week.weightMult);
+                    const weight = Math.max(0, Math.round(b.avgWeight * effectiveWeightMult(ex, week)));
                     const count = Math.max(1, Math.round(ex.sets.length * week.setsMult));
-                    return <li key={ex.id}>{ex.name} — {count} × {b.reps} × {weight} кг</li>;
+                    return (
+                      <li key={ex.id}>
+                        {ex.name}{ex.is_assisted ? " (ассист.)" : ""} — {count} × {b.reps} × {weight} кг
+                      </li>
+                    );
                   })}
                 </ul>
               </div>

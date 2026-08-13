@@ -104,6 +104,8 @@ function ExercisePicker({ onAdd }) {
   const [timeMinutes, setTimeMinutes] = useState(20);
   const [repsValue, setRepsValue] = useState(15);
   const [distanceValue, setDistanceValue] = useState(5);
+  const [isAssisted, setIsAssisted] = useState(false);
+  const [periodizationEnabled, setPeriodizationEnabled] = useState(true);
 
   const group = EXERCISE_GROUPS[groupIdx];
   const exercise = group.exercises[exIdx];
@@ -111,17 +113,28 @@ function ExercisePicker({ onAdd }) {
 
   const resetCardioDefaults = () => { setTimeHours(0); setTimeMinutes(20); setRepsValue(15); setDistanceValue(5); };
 
+  const applyAssistedAutoDetect = (eq) => {
+    setIsAssisted(eq === "Гравитрон" || eq === "Резинка");
+  };
+
   const changeGroup = (idx) => {
     const g = EXERCISE_GROUPS[idx];
     setGroupIdx(idx); setExIdx(0);
-    setEquipment(g.name === "Кардио" ? (g.exercises[0].equipment[0] || "") : "");
+    const eq = g.name === "Кардио" ? (g.exercises[0].equipment[0] || "") : "";
+    setEquipment(eq);
     setVariant(""); resetCardioDefaults();
+    applyAssistedAutoDetect(eq);
+    setPeriodizationEnabled(true);
   };
   const changeExercise = (idx) => {
     setExIdx(idx);
-    setEquipment(isCardio ? (group.exercises[idx].equipment[0] || "") : "");
+    const eq = isCardio ? (group.exercises[idx].equipment[0] || "") : "";
+    setEquipment(eq);
     setVariant(""); resetCardioDefaults();
+    applyAssistedAutoDetect(eq);
+    setPeriodizationEnabled(true);
   };
+  const changeEquipment = (eq) => { setEquipment(eq); applyAssistedAutoDetect(eq); };
 
   const composedName = [group.name, exercise.name, equipment || null, variant || null].filter(Boolean).join(" - ");
 
@@ -131,10 +144,10 @@ function ExercisePicker({ onAdd }) {
       if (equipment === "По времени") value = formatCardioTime(timeHours, timeMinutes);
       else if (equipment === "По дистанции") value = `${distanceValue} км`;
       else if (equipment === "По повторениям") value = `${repsValue} ${pluralizeRu(repsValue, ["повторение", "повторения", "повторений"])}`;
-      onAdd({ id: uid(), name: composedName, sets: [{ reps: value, weight: "" }] });
+      onAdd({ id: uid(), name: composedName, sets: [{ reps: value, weight: "" }], isAssisted: false, periodizationEnabled: false });
       resetCardioDefaults();
     } else {
-      onAdd({ id: uid(), name: composedName, sets });
+      onAdd({ id: uid(), name: composedName, sets, isAssisted, periodizationEnabled });
       setSets(DEFAULT_SETS());
     }
   };
@@ -159,7 +172,7 @@ function ExercisePicker({ onAdd }) {
       {exercise.equipment.length > 0 && (
         <div className="mb-3">
           <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>{isCardio ? "Как измеряем" : "Снаряд / вариант"}</label>
-          <ChipSelect options={exercise.equipment} value={equipment} onChange={setEquipment} allowNone={!isCardio} />
+          <ChipSelect options={exercise.equipment} value={equipment} onChange={changeEquipment} allowNone={!isCardio} />
         </div>
       )}
 
@@ -198,6 +211,19 @@ function ExercisePicker({ onAdd }) {
         </div>
       ) : (
         <SetsEditor sets={sets} onChange={setSets} />
+      )}
+
+      {!isCardio && (
+        <div className="flex flex-col gap-2 mb-3">
+          <label className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-soft)" }}>
+            <input type="checkbox" checked={isAssisted} onChange={(e) => setIsAssisted(e.target.checked)} />
+            Ассистируемое (чем больше вес/сопротивление — тем легче, напр. гравитрон, резина)
+          </label>
+          <label className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-soft)" }}>
+            <input type="checkbox" checked={periodizationEnabled} onChange={(e) => setPeriodizationEnabled(e.target.checked)} />
+            Учитывать в периодизации нагрузки
+          </label>
+        </div>
       )}
 
       <div className="text-xs mb-3" style={{ color: "var(--ink-soft)" }}>
