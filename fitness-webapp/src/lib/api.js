@@ -112,6 +112,68 @@ export async function touchClient(clientId) {
   await supabase.from("clients").update({ last_active_at: new Date().toISOString() }).eq("id", clientId);
 }
 
+export async function updateClientProfile(clientId, fields) {
+  const { data, error } = await supabase.from("clients").update(fields).eq("id", clientId).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function setClientGoals(clientId, goals) {
+  const { data, error } = await supabase.from("clients").update({ goals }).eq("id", clientId).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// Average completed workout sessions per week over the last N weeks —
+// used to compare against the trainer's planned frequency.
+export async function fetchWeeklySessionRate(clientId, weeks = 3) {
+  const since = new Date();
+  since.setDate(since.getDate() - weeks * 7);
+  const { data, error } = await supabase
+    .from("workout_sessions")
+    .select("finished_at")
+    .eq("client_id", clientId)
+    .gte("finished_at", since.toISOString());
+  if (error) throw error;
+  return (data || []).length / weeks;
+}
+
+/* ------------------------------- MEAL PLAN ------------------------------- */
+// Trainer-prescribed diet — the client sees this in their nutrition diary and
+// can either check items off (auto-logs them) or log something else manually.
+
+export async function fetchMealPlan(clientId) {
+  const { data, error } = await supabase
+    .from("meal_plan_items")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("meal")
+    .order("position");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addMealPlanItem(clientId, item) {
+  const { error } = await supabase.from("meal_plan_items").insert({
+    client_id: clientId,
+    meal: item.meal,
+    name: item.name,
+    serving_label: item.servingLabel,
+    qty: item.qty,
+    kcal: item.kcal,
+    protein: item.protein,
+    carbs: item.carbs,
+    fat: item.fat,
+    position: item.position || 0,
+  });
+  if (error) throw error;
+}
+
+export async function removeMealPlanItem(itemId) {
+  const { error } = await supabase.from("meal_plan_items").delete().eq("id", itemId);
+  if (error) throw error;
+}
+
 /* ------------------------------- WORKOUTS ------------------------------- */
 
 export async function fetchWorkoutsForClient(clientId) {

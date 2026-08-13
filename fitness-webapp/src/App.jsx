@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
-import { NutritionTab } from "./components/Nutrition";
+import { NutritionTab, TrainerNutritionPanel } from "./components/Nutrition";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
   fetchTrainers, fetchTrainerByAuthId, fetchClientsForTrainer,
@@ -505,7 +505,9 @@ function ClientHome({ client, onLogout }) {
   );
 }
 
-function TrainerClientDetail({ client, onBack }) {
+function TrainerClientDetail({ client: initialClient, onBack }) {
+  const [client, setClient] = useState(initialClient);
+  const [tab, setTab] = useState("workouts");
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAssign, setShowAssign] = useState(false);
@@ -533,42 +535,61 @@ function TrainerClientDetail({ client, onBack }) {
         {PLANS.find((p) => p.id === client.plan)?.name}
       </Chip>
 
-      {showAssign ? (
-        <AssignWorkoutForm onAssign={handleAssign} onCancel={() => setShowAssign(false)} />
-      ) : (
-        <button className="fp-btn fp-btn-accent px-4 py-2.5 mb-5 flex items-center gap-2" onClick={() => setShowAssign(true)}>
-          <Dumbbell size={15} /> Назначить тренировку
-        </button>
-      )}
+      <div className="flex gap-4 mb-5" style={{ borderBottom: "1px solid var(--line)" }}>
+        <button
+          onClick={() => setTab("workouts")}
+          className="text-sm pb-2"
+          style={{ fontWeight: 600, color: tab === "workouts" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "workouts" ? "2px solid var(--accent)" : "none" }}
+        >Тренировки</button>
+        <button
+          onClick={() => setTab("nutrition")}
+          className="text-sm pb-2"
+          style={{ fontWeight: 600, color: tab === "nutrition" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "nutrition" ? "2px solid var(--accent)" : "none" }}
+        >Питание</button>
+      </div>
 
-      {loading ? (
-        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
-      ) : workouts.length === 0 && !showAssign ? (
-        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Заданий пока нет.</p>
+      {tab === "nutrition" ? (
+        <TrainerNutritionPanel client={client} onClientUpdated={(updated) => updated && setClient(updated)} />
       ) : (
-        <div className="space-y-3">
-          {workouts.map((w) => {
-            const doneCount = w.workout_exercises.filter((e) => e.done).length;
-            return (
-              <div key={w.id} className="fp-card p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-semibold">{w.title}</div>
-                  <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>{doneCount}/{w.workout_exercises.length}</Chip>
-                </div>
-                <ul className="text-sm space-y-1">
-                  {w.workout_exercises.map((e) => (
-                    <li key={e.id} className="flex items-center gap-2">
-                      {e.done ? <CheckCircle2 size={14} color="var(--accent-2)" /> : <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid var(--line)", display: "inline-block" }} />}
-                      <span style={{ color: e.done ? "var(--ink-soft)" : "var(--ink)", textDecoration: e.done ? "line-through" : "none" }}>
-                        {e.name} — {formatSets(e.sets)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
+        <>
+          {showAssign ? (
+            <AssignWorkoutForm onAssign={handleAssign} onCancel={() => setShowAssign(false)} />
+          ) : (
+            <button className="fp-btn fp-btn-accent px-4 py-2.5 mb-5 flex items-center gap-2" onClick={() => setShowAssign(true)}>
+              <Dumbbell size={15} /> Назначить тренировку
+            </button>
+          )}
+
+          {loading ? (
+            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
+          ) : workouts.length === 0 && !showAssign ? (
+            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Заданий пока нет.</p>
+          ) : (
+            <div className="space-y-3">
+              {workouts.map((w) => {
+                const doneCount = w.workout_exercises.filter((e) => e.done).length;
+                return (
+                  <div key={w.id} className="fp-card p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="font-semibold">{w.title}</div>
+                      <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>{doneCount}/{w.workout_exercises.length}</Chip>
+                    </div>
+                    <ul className="text-sm space-y-1">
+                      {w.workout_exercises.map((e) => (
+                        <li key={e.id} className="flex items-center gap-2">
+                          {e.done ? <CheckCircle2 size={14} color="var(--accent-2)" /> : <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid var(--line)", display: "inline-block" }} />}
+                          <span style={{ color: e.done ? "var(--ink-soft)" : "var(--ink)", textDecoration: e.done ? "line-through" : "none" }}>
+                            {e.name} — {formatSets(e.sets)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
