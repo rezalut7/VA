@@ -1,16 +1,18 @@
 import { FOOD_DB } from "../data/foodDb";
+import { searchProductsDb, getProductDetailsDb } from "./api";
 
-/* ------------------------- FOOD PROVIDER (three-tier) -------------------------
- * 1. Local FOOD_DB (~165 curated Russian staples) — instant, always available.
- * 2. Our own /api/food/* routes (Vercel serverless functions in /api/food) —
- *    proxy FatSecret, which needs its Client ID/Secret kept server-side. Same
- *    origin as the frontend, so no CORS issues.
- * 3. Live Open Food Facts (search.openfoodfacts.org) — keyless, direct from the
- *    browser, used as a last supplement for branded items not found above.
+/* ------------------------- FOOD PROVIDER (DB-first) -------------------------
+ * 1. Supabase `products` table (~1,846 real items imported from Open Food Facts,
+ *    see supabase_products_table.sql) — a real searchable database, not a JS
+ *    array shipped to the browser. This is the primary source now.
+ * 2. Small local FOOD_DB (~165 hand-written staples) — instant fallback if the
+ *    DB query fails or is still warming up.
+ * 3. Our own /api/food/* routes (FatSecret proxy) — same-origin, no CORS.
+ * 4. Live Open Food Facts search-a-licious — last resort for anything else.
  *
- * Each tier only runs if the previous one didn't return enough, and any tier
- * failing (network error, missing env vars, rate limit) just falls through to
- * the next — the app always works on the local data alone at minimum.
+ * Each tier only runs if the previous one didn't return enough results, and
+ * any tier failing (network error, missing table, rate limit) falls through
+ * to the next — the app always works on tier 2 alone at minimum.
  * ------------------------------------------------------------------------- */
 
 async function searchFoodsLocal(query) {
@@ -19,6 +21,14 @@ async function searchFoodsLocal(query) {
   return FOOD_DB.filter((f) => f.name.toLowerCase().includes(q))
     .slice(0, 8)
     .map((f) => ({ id: f.id, name: f.name }));
+}
+
+async function searchFoodsDb(query) {
+  try {
+    return await searchProductsDb(query);
+  } catch (e) {
+    return [];
+  }
 }
 
 async function searchFoodsFatSecret(query) {
@@ -51,8 +61,8 @@ export async function searchFoods(query) {
   const q = query.trim();
   if (!q) return [];
 
-  const results = await searchFoodsLocal(q);
-  const seen = new Set(results.map((f) => f.id));
+  const results = [];
+  const seen = new Set();
   const addUnique = (list) => {
     for (const f of list) {
       if (!seen.has(f.id) && results.length < 8) {
@@ -62,6 +72,8 @@ export async function searchFoods(query) {
     }
   };
 
+  addUnique(await searchFoodsDb(q));
+  if (results.length < 8) addUnique(await searchFoodsLocal(q));
   if (results.length < 8) addUnique(await searchFoodsFatSecret(q));
   if (results.length < 8) addUnique(await searchFoodsOpenFoodFacts(q));
 
@@ -69,9 +81,33 @@ export async function searchFoods(query) {
 }
 
 export async function getFoodDetails(foodId) {
+  if (foodId.startsWith("db_")) return getFoodDetailsDb(foodId);
   if (/^f\d+$/.test(foodId)) return getFoodDetailsLocal(foodId);
   if (foodId.startsWith("fs_")) return getFoodDetailsFatSecret(foodId);
   return getFoodDetailsOpenFoodFacts(foodId);
+}
+
+async function getFoodDetailsDb(foodId) {
+  try {
+    const rawId = foodId.slice(3);
+    const p = await getProductDetailsDb(rawId);
+    if (!p) return null;
+    const round1 = (n) => Math.round(n * 10) / 10;
+    return {
+      id: foodId,
+      name: p.name,
+      servings: [
+        { id: `${foodId}-100g`, label: "100 г", kcal: p.kcal, protein: p.protein, carbs: p.carbs, fat: p.fat },
+        {
+          id: `${foodId}-portion`, label: "1 порция (200 г)",
+          kcal: round1(p.kcal * 2), protein: round1(p.protein * 2),
+          carbs: round1(p.carbs * 2), fat: round1(p.fat * 2),
+        },
+      ],
+    };
+  } catch (e) {
+    return null;
+  }
 }
 
 function getFoodDetailsLocal(foodId) {

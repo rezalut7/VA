@@ -217,4 +217,24 @@ export async function removeNutritionEntry(entryId) {
   if (error) throw error;
 }
 
+/* -------------------------------- PRODUCTS -------------------------------- */
+// Searchable food database table (imported from Open Food Facts, ~1,846 items,
+// see supabase_products_table.sql). This is now the primary search source.
+
+export async function searchProductsDb(query) {
+  const { data, error } = await supabase
+    .from("products")
+    .select("id,name")
+    .ilike("name", `%${query}%`)
+    .limit(8);
+  if (error) throw error;
+  return (data || []).map((p) => ({ id: `db_${p.id}`, name: p.name }));
+}
+
+export async function getProductDetailsDb(id) {
+  const { data, error } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 
