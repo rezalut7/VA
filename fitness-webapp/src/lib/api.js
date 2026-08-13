@@ -299,4 +299,149 @@ export async function getProductDetailsDb(id) {
   return data;
 }
 
+/* --------------------------------- CHAT --------------------------------- */
 
+export async function fetchChatMessages(clientId) {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("created_at");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function sendChatMessage(clientId, fromName, senderRole, text) {
+  const { error } = await supabase.from("chat_messages").insert({
+    client_id: clientId, from_name: fromName, sender_role: senderRole, text,
+  });
+  if (error) throw error;
+  await touchClient(clientId);
+}
+
+// Живая подписка на новые сообщения в чате конкретного клиента.
+// Возвращает функцию отписки — вызвать при размонтировании компонента.
+export function subscribeToChatMessages(clientId, onInsert) {
+  const channel = supabase
+    .channel(`chat:${clientId}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "chat_messages", filter: `client_id=eq.${clientId}` },
+      (payload) => onInsert(payload.new)
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+export async function markChatRead(authUserId, clientId) {
+  await supabase.from("chat_reads").upsert(
+    { auth_user_id: authUserId, client_id: clientId, last_read_at: new Date().toISOString() },
+    { onConflict: "auth_user_id,client_id" }
+  );
+}
+
+// Единый инбокс тренера: по каждому VIP-клиенту — последнее сообщение и
+// количество непрочитанных (сообщений от клиента после last_read_at тренера).
+export async function fetchTrainerInbox(trainerAuthId, clients) {
+  const results = await Promise.all(
+    clients.map(async (c) => {
+      const [{ data: lastMsgs }, { data: readRow }] = await Promise.all([
+        supabase.from("chat_messages").select("*").eq("client_id", c.id).order("created_at", { ascending: false }).limit(1),
+        supabase.from("chat_reads").select("last_read_at").eq("auth_user_id", trainerAuthId).eq("client_id", c.id).maybeSingle(),
+      ]);
+      const lastMessage = (lastMsgs || [])[0] || null;
+      const since = readRow?.last_read_at || "1970-01-01";
+      const { count } = await supabase
+        .from("chat_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", c.id)
+        .eq("sender_role", "client")
+        .gt("created_at", since);
+      return { client: c, lastMessage, unreadCount: count || 0 };
+    })
+  );
+  return results.sort((a, b) => {
+    const ta = a.lastMessage ? new Date(a.lastMessage.created_at).getTime() : 0;
+    const tb = b.lastMessage ? new Date(b.lastMessage.created_at).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+/* ------------------------------- CHECK-INS ------------------------------- */
+
+export async function fetchCheckins(clientId) {
+  const { data, error } = await supabase
+    .from("checkins")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("entry_date", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addCheckin(clientId, checkin) {
+  const { error } = await supabase.from("checkins").insert({
+    client_id: clientId,
+    entry_date: checkin.date,
+    weight: checkin.weight,
+    waist: checkin.waist, hips: checkin.hips, chest: checkin.chest, arm: checkin.arm,
+    energy: checkin.energy, adherence: checkin.adherence, note: checkin.note,
+    photo_url: checkin.photoUrl || null,
+  });
+  if (error) throw error;
+  await touchClient(clientId);
+}
+
+export async function uploadCheckinPhoto(clientId, file) {
+  const path = `${clientId}/${Date.now()}-${file.name}`;
+  const { error } = await supabase.storage.from("checkin-photos").upload(path, file);
+  if (error) throw error;
+  const { data } = supabase.storage.from("checkin-photos").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/* ------------------------------- PROGRESS ------------------------------- */
+
+export async function fetchProgress(clientId) {
+  const { data, error } = await supabase
+    .from("progress_entries")
+    .select("*")
+    .eq("client_id", clientId)
+    .order("entry_date");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addProgressEntry(clientId, weight, note) {
+  const { error } = await supabase.from("progress_entries").insert({
+    client_id: clientId, entry_date: new Date().toISOString().slice(0, 10), weight, note,
+  });
+  if (error) throw error;
+  await touchClient(clientId);
+}
+
+/* ---------------------------- PUSH NOTIFICATIONS ---------------------------- */
+
+export async function savePushSubscription(authUserId, subscription) {
+  const json = subscription.toJSON();
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    {
+      auth_user_id: authUserId,
+      endpoint: json.endpoint,
+      p256dh: json.keys.p256dh,
+      auth_key: json.keys.auth,
+    },
+    { onConflict: "endpoint" }
+  );
+  if (error) throw error;
+}
+
+export async function fetchNutritionLoggingDays(clientId, sinceDate) {
+  const { data, error } = await supabase
+    .from("nutrition_entries")
+    .select("entry_date")
+    .eq("client_id", clientId)
+    .gte("entry_date", sinceDate);
+  if (error) throw error;
+  return new Set((data || []).map((d) => d.entry_date)).size;
+}

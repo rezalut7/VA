@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
-  Users, Sparkles,
+  Users, Sparkles, MessageCircle, LayoutGrid, Bell,
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
 import { NutritionTab, TrainerNutritionPanel } from "./components/Nutrition";
+import { ChatPanel, TrainerInbox } from "./components/Chat";
+import { ProgressTab, TrainerProgressPanel } from "./components/Progress";
+import { enablePushNotifications, pushSupported } from "./lib/push";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
   fetchTrainers, fetchTrainerByAuthId, fetchClientsForTrainer,
@@ -405,12 +408,14 @@ function OnboardingForm({ client, onDone }) {
   );
 }
 
-function ClientHome({ client, onLogout }) {
+function ClientHome({ client, onLogout, authUserId }) {
   const [tab, setTab] = useState("today");
   const [workouts, setWorkouts] = useState([]);
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
   const [activeSession, setActiveSession] = useState(null);
+  const [pushStatus, setPushStatus] = useState(null);
   const plan = PLANS.find((p) => p.id === client.plan);
+  const isVip = client.plan === "vip";
 
   const loadWorkouts = () => {
     setLoadingWorkouts(true);
@@ -433,6 +438,12 @@ function ClientHome({ client, onLogout }) {
     loadWorkouts();
   };
 
+  const handleEnablePush = async () => {
+    setPushStatus("busy");
+    const res = await enablePushNotifications(authUserId);
+    setPushStatus(res.ok ? "on" : res.reason);
+  };
+
   if (activeSession) {
     return <WorkoutSession workout={activeSession} onExit={() => setActiveSession(null)} onFinish={handleFinishSession} />;
   }
@@ -441,14 +452,15 @@ function ClientHome({ client, onLogout }) {
     { key: "today", label: "Сегодня", icon: Dumbbell },
     { key: "nutrition", label: "Питание", icon: Apple },
     { key: "progress", label: "Прогресс", icon: TrendingUp },
+    ...(isVip ? [{ key: "chat", label: "Чат", icon: MessageCircle }] : []),
     { key: "profile", label: "Профиль", icon: User },
   ];
 
   return (
     <div className="min-h-screen fp-page-with-nav">
-      <PageHeader eyebrow="КЛИЕНТ" title={client.name} subtitle={`Тариф «${plan.name}»`} />
+      {tab !== "chat" && <PageHeader eyebrow="КЛИЕНТ" title={client.name} subtitle={`Тариф «${plan.name}»`} />}
 
-      <div className="pt-2 pb-6">
+      <div className={tab === "chat" ? "pt-4" : "pt-2 pb-6"}>
         {tab === "today" && (
           <div className="px-4 space-y-3">
             {loadingWorkouts ? (
@@ -481,8 +493,17 @@ function ClientHome({ client, onLogout }) {
           </div>
         )}
         {tab === "nutrition" && <NutritionTab client={client} />}
-        {tab === "progress" && (
-          <ComingSoonCard icon={TrendingUp} title="Прогресс скоро здесь" text="Чек-ины, замеры и графики появятся на следующем шаге." />
+        {tab === "progress" && <ProgressTab client={client} />}
+        {tab === "chat" && isVip && (
+          <div>
+            <div className="px-4 pb-2">
+              <button onClick={() => setTab("today")} className="flex items-center gap-1 text-sm" style={{ color: "var(--ink-soft)" }}>
+                <ChevronLeft size={16} /> Назад
+              </button>
+              <h2 className="fp-display text-xl font-semibold mt-1">Чат с тренером</h2>
+            </div>
+            <ChatPanel clientId={client.id} currentSender={client.name} senderRole="client" authUserId={authUserId} />
+          </div>
         )}
         {tab === "profile" && (
           <div className="px-4">
@@ -493,6 +514,28 @@ function ClientHome({ client, onLogout }) {
                 <div><span style={{ color: "var(--ink-soft)" }}>Опыт: </span>{client.onboarding?.experience}</div>
               </div>
             </div>
+
+            {pushSupported() && (
+              <div className="fp-card p-4 mb-3">
+                <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
+                  <Bell size={13} /> УВЕДОМЛЕНИЯ
+                </div>
+                {pushStatus === "on" ? (
+                  <p className="text-xs" style={{ color: "var(--accent-2)" }}>Уведомления включены ✓</p>
+                ) : (
+                  <>
+                    <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>
+                      Получайте push-уведомления о новых сообщениях от тренера.
+                    </p>
+                    <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleEnablePush} disabled={pushStatus === "busy"}>
+                      {pushStatus === "busy" ? "Включаем…" : "Включить уведомления"}
+                    </button>
+                    {pushStatus === "denied" && <p className="text-xs mt-2" style={{ color: "var(--danger)" }}>Уведомления заблокированы в настройках браузера.</p>}
+                  </>
+                )}
+              </div>
+            )}
+
             <button className="fp-btn fp-btn-outline w-full py-2.5 flex items-center justify-center gap-2" onClick={onLogout}>
               <LogOut size={14} /> Выйти
             </button>
@@ -505,12 +548,13 @@ function ClientHome({ client, onLogout }) {
   );
 }
 
-function TrainerClientDetail({ client: initialClient, onBack }) {
+function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
   const [client, setClient] = useState(initialClient);
   const [tab, setTab] = useState("workouts");
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAssign, setShowAssign] = useState(false);
+  const isVip = client.plan === "vip";
 
   const load = () => {
     setLoading(true);
@@ -535,21 +579,28 @@ function TrainerClientDetail({ client: initialClient, onBack }) {
         {PLANS.find((p) => p.id === client.plan)?.name}
       </Chip>
 
-      <div className="flex gap-4 mb-5" style={{ borderBottom: "1px solid var(--line)" }}>
-        <button
-          onClick={() => setTab("workouts")}
-          className="text-sm pb-2"
-          style={{ fontWeight: 600, color: tab === "workouts" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "workouts" ? "2px solid var(--accent)" : "none" }}
-        >Тренировки</button>
-        <button
-          onClick={() => setTab("nutrition")}
-          className="text-sm pb-2"
-          style={{ fontWeight: 600, color: tab === "nutrition" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "nutrition" ? "2px solid var(--accent)" : "none" }}
-        >Питание</button>
+      <div className="flex gap-4 mb-5 overflow-x-auto fp-scroll" style={{ borderBottom: "1px solid var(--line)" }}>
+        {[
+          { key: "workouts", label: "Тренировки" },
+          { key: "nutrition", label: "Питание" },
+          { key: "progress", label: "Прогресс" },
+          ...(isVip ? [{ key: "chat", label: "Чат" }] : []),
+        ].map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className="text-sm pb-2 whitespace-nowrap"
+            style={{ fontWeight: 600, color: tab === t.key ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === t.key ? "2px solid var(--accent)" : "none" }}
+          >{t.label}</button>
+        ))}
       </div>
 
       {tab === "nutrition" ? (
         <TrainerNutritionPanel client={client} onClientUpdated={(updated) => updated && setClient(updated)} />
+      ) : tab === "progress" ? (
+        <TrainerProgressPanel client={client} />
+      ) : tab === "chat" && isVip ? (
+        <ChatPanel clientId={client.id} currentSender={trainer.name} senderRole="trainer" authUserId={trainer.auth_user_id} />
       ) : (
         <>
           {showAssign ? (
@@ -595,35 +646,122 @@ function TrainerClientDetail({ client: initialClient, onBack }) {
   );
 }
 
-function TrainerHome({ trainer, clients, onLogout }) {
+function TrainerHome({ trainer, clients, onLogout, authUserId }) {
+  const [tab, setTab] = useState("overview");
   const [selectedClient, setSelectedClient] = useState(null);
+  const [pushStatus, setPushStatus] = useState(null);
+  const vipClients = clients.filter((c) => c.plan === "vip");
 
   if (selectedClient) {
-    return <TrainerClientDetail client={selectedClient} onBack={() => setSelectedClient(null)} />;
+    return <TrainerClientDetail client={selectedClient} trainer={trainer} onBack={() => setSelectedClient(null)} />;
   }
 
+  const handleEnablePush = async () => {
+    setPushStatus("busy");
+    const res = await enablePushNotifications(authUserId);
+    setPushStatus(res.ok ? "on" : res.reason);
+  };
+
+  const navItems = [
+    { key: "overview", label: "Обзор", icon: LayoutGrid },
+    { key: "clients", label: "Клиенты", icon: Users },
+    { key: "chats", label: "Чаты", icon: MessageCircle },
+    { key: "profile", label: "Профиль", icon: User },
+  ];
+
+  const attentionClients = clients.filter((c) => !c.subscription_active);
+
   return (
-    <div className="min-h-screen">
-      <PageHeader eyebrow="ТРЕНЕР" title={trainer.name} subtitle={trainer.spec} onLogout={onLogout} />
-      <div className="px-4 pt-2">
-        <div className="flex items-center gap-1.5 mb-2 text-xs" style={{ color: "var(--ink-soft)" }}>
-          <Users size={13} /> КЛИЕНТЫ ({clients.length})
-        </div>
-        {clients.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Пока нет клиентов на тарифах «Индивидуальный план» и «VIP».</p>
-        ) : (
-          <div className="space-y-2">
-            {clients.map((c) => (
-              <button key={c.id} onClick={() => setSelectedClient(c)} className="fp-card p-3 flex items-center justify-between w-full text-left">
-                <span className="text-sm font-medium">{c.name}</span>
-                <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>
-                  {PLANS.find((p) => p.id === c.plan)?.name}
-                </Chip>
-              </button>
-            ))}
+    <div className="min-h-screen fp-page-with-nav">
+      <PageHeader eyebrow="ТРЕНЕР" title={trainer.name} subtitle={trainer.spec} />
+
+      <div className="pt-2 pb-6">
+        {tab === "overview" && (
+          <div className="px-4">
+            <div className="fp-scoreboard p-5 grid grid-cols-2 gap-4 mb-5">
+              <div><div className="num">{clients.length}</div><div className="text-xs opacity-70 mt-1">Клиентов</div></div>
+              <div><div className="num">{vipClients.length}</div><div className="text-xs opacity-70 mt-1">На VIP</div></div>
+            </div>
+            {attentionClients.length > 0 && (
+              <div className="mb-5">
+                <div className="text-xs mb-2 font-semibold" style={{ color: "var(--ink-soft)" }}>ТРЕБУЮТ ВНИМАНИЯ</div>
+                <div className="space-y-2">
+                  {attentionClients.map((c) => (
+                    <button key={c.id} onClick={() => setSelectedClient(c)} className="fp-card w-full p-3 text-left" style={{ borderColor: "#FFD9C7" }}>
+                      <div className="text-sm font-medium">{c.name}</div>
+                      <div className="text-xs" style={{ color: "var(--accent)" }}>Оплата не проведена</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="text-xs mb-2 font-semibold" style={{ color: "var(--ink-soft)" }}>ВСЕ КЛИЕНТЫ</div>
+            {clients.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Пока нет клиентов на тарифах «Индивидуальный план» и «VIP».</p>
+            ) : (
+              <div className="space-y-2">
+                {clients.map((c) => (
+                  <button key={c.id} onClick={() => setSelectedClient(c)} className="fp-card p-3 flex items-center justify-between w-full text-left">
+                    <span className="text-sm font-medium">{c.name}</span>
+                    <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>{PLANS.find((p) => p.id === c.plan)?.name}</Chip>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "clients" && (
+          <div className="px-4">
+            <div className="flex items-center gap-1.5 mb-3 text-xs" style={{ color: "var(--ink-soft)" }}>
+              <Users size={13} /> КЛИЕНТЫ ({clients.length})
+            </div>
+            {clients.length === 0 ? (
+              <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Пока нет клиентов на тарифах «Индивидуальный план» и «VIP».</p>
+            ) : (
+              <div className="space-y-2">
+                {clients.map((c) => (
+                  <button key={c.id} onClick={() => setSelectedClient(c)} className="fp-card p-3 flex items-center justify-between w-full text-left">
+                    <span className="text-sm font-medium">{c.name}</span>
+                    <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>{PLANS.find((p) => p.id === c.plan)?.name}</Chip>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "chats" && (
+          <TrainerInbox trainer={trainer} clients={vipClients} onOpenChat={setSelectedClient} />
+        )}
+
+        {tab === "profile" && (
+          <div className="px-4">
+            {pushSupported() && (
+              <div className="fp-card p-4 mb-3">
+                <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
+                  <Bell size={13} /> УВЕДОМЛЕНИЯ
+                </div>
+                {pushStatus === "on" ? (
+                  <p className="text-xs" style={{ color: "var(--accent-2)" }}>Уведомления включены ✓</p>
+                ) : (
+                  <>
+                    <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>Получайте push о новых сообщениях от клиентов.</p>
+                    <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleEnablePush} disabled={pushStatus === "busy"}>
+                      {pushStatus === "busy" ? "Включаем…" : "Включить уведомления"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            <button className="fp-btn fp-btn-outline w-full py-2.5 flex items-center justify-center gap-2" onClick={onLogout}>
+              <LogOut size={14} /> Выйти
+            </button>
           </div>
         )}
       </div>
+
+      <BottomNav items={navItems} active={tab} onChange={setTab} />
     </div>
   );
 }
@@ -673,12 +811,12 @@ export default function App() {
     return <LoginScreen trainers={trainers} onPickTrainerLogin={() => setScreen("trainer-login")} onPickClientEntry={() => setScreen("client-entry")} />;
   }
 
-  if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} />;
+  if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} />;
 
   if (client) {
     if (!client.subscription_active) return <SubscribeGate client={client} onPaid={setClient} />;
     if (!client.onboarding_complete) return <OnboardingForm client={client} onDone={setClient} />;
-    return <ClientHome client={client} onLogout={handleLogout} />;
+    return <ClientHome client={client} onLogout={handleLogout} authUserId={session.user.id} />;
   }
 
   return (
