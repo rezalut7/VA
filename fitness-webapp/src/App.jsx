@@ -63,15 +63,17 @@ function Chip({ children, style }) {
 
 function PageHeader({ eyebrow, title, subtitle, onLogout }) {
   return (
-    <div className="fp-sticky-header px-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <Chip style={{ background: "var(--ink)", color: "#fff", marginBottom: 8 }}>{eyebrow}</Chip>
-          <h1 className="fp-display text-2xl font-bold">{title}</h1>
-          {subtitle && <p className="text-sm mt-1" style={{ color: "var(--ink-soft)" }}>{subtitle}</p>}
+    <div className="fp-fixed-header px-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Chip style={{ background: "var(--ink)", color: "#fff", flexShrink: 0 }}>{eyebrow}</Chip>
+            <h1 className="fp-display text-base font-bold truncate">{title}</h1>
+          </div>
+          {subtitle && <p className="text-xs mt-0.5 truncate" style={{ color: "var(--ink-soft)" }}>{subtitle}</p>}
         </div>
         {onLogout && (
-          <button onClick={onLogout} className="fp-btn fp-btn-outline px-3 py-2 flex items-center gap-1.5 text-xs">
+          <button onClick={onLogout} className="fp-btn fp-btn-outline px-3 py-2 flex items-center gap-1.5 text-xs flex-shrink-0">
             <LogOut size={14} /> Выйти
           </button>
         )}
@@ -95,16 +97,27 @@ function ComingSoonCard({ icon: Icon, title, text }) {
 function BottomNav({ items, active, onChange }) {
   return (
     <nav className="fp-bottom-nav">
-      {items.map((it) => (
-        <button
-          key={it.key}
-          className={`fp-bottom-nav-item ${active === it.key ? "active" : ""}`}
-          onClick={() => onChange(it.key)}
-        >
-          <it.icon size={20} />
-          <span className="label">{it.label}</span>
-        </button>
-      ))}
+      {items.map((it) =>
+        it.primary ? (
+          <button
+            key={it.key}
+            className={`fp-bottom-nav-primary ${active === it.key ? "active" : ""}`}
+            onClick={() => onChange(it.key)}
+          >
+            <span className="fp-bottom-nav-primary-circle"><it.icon size={22} /></span>
+            <span className="label">{it.label}</span>
+          </button>
+        ) : (
+          <button
+            key={it.key}
+            className={`fp-bottom-nav-item ${active === it.key ? "active" : ""}`}
+            onClick={() => onChange(it.key)}
+          >
+            <it.icon size={20} />
+            <span className="label">{it.label}</span>
+          </button>
+        )
+      )}
     </nav>
   );
 }
@@ -575,9 +588,9 @@ function ClientHome({ client, onLogout, authUserId }) {
   }
 
   const navItems = [
-    { key: "today", label: "Сегодня", icon: Dumbbell },
-    { key: "nutrition", label: "Питание", icon: Apple },
     { key: "progress", label: "Прогресс", icon: TrendingUp },
+    { key: "nutrition", label: "Питание", icon: Apple },
+    { key: "today", label: "Сегодня", icon: Dumbbell, primary: true },
     ...(isVip ? [{ key: "chat", label: "Чат", icon: MessageCircle }] : []),
     { key: "profile", label: "Профиль", icon: User },
   ];
@@ -586,7 +599,7 @@ function ClientHome({ client, onLogout, authUserId }) {
     <div className="min-h-screen fp-page-with-nav">
       {tab !== "chat" && <PageHeader eyebrow="КЛИЕНТ" title={client.name} subtitle={`Тариф «${plan.name}»`} />}
 
-      <div className={tab === "chat" ? "pt-4" : "pt-2 pb-6"}>
+      <div className={tab === "chat" ? "fp-safe-top pt-4" : "fp-content-with-header pb-6"}>
         {tab === "today" && (
           <div className="px-4 space-y-3">
             {loadingWorkouts ? (
@@ -600,32 +613,51 @@ function ClientHome({ client, onLogout, authUserId }) {
                 return total > 0 && done === total;
               };
               const queue = [...workouts].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-              const current = queue.find((w) => !isAllDone(w));
-
-              if (!current) {
-                return <ComingSoonCard icon={CheckCircle2} title="Все тренировки выполнены" text="Ждите новое задание от тренера." />;
-              }
+              const currentIndex = queue.findIndex((w) => !isAllDone(w));
+              const current = currentIndex === -1 ? null : queue[currentIndex];
+              // Только пройденные + текущая — то, что ещё впереди в очереди, клиенту не показываем.
+              const history = (currentIndex === -1 ? queue : queue.slice(0, currentIndex)).slice().reverse();
 
               return (
-                <div className="fp-card p-4">
-                  <div className="font-semibold mb-3">{current.title}</div>
-                  <ul className="space-y-2.5 mb-3">
-                    {current.workout_exercises.map((e) => (
-                      <li key={e.id} className="flex items-center gap-3">
-                        <div className={`fp-checkbox ${e.done ? "done" : ""}`} onClick={() => handleToggleExercise(e.id, e.done)}>
-                          {e.done && <CheckCircle2 size={16} color="#fff" />}
-                        </div>
-                        <div>
-                          <div style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? "var(--ink-soft)" : "var(--ink)" }}>{e.name}</div>
-                          <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(e.sets)}</div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <button className="fp-btn fp-btn-accent w-full py-2.5" onClick={() => setActiveSession(current)}>
-                    Начать тренировку
-                  </button>
-                </div>
+                <>
+                  {current ? (
+                    <div className="fp-card p-4">
+                      <div className="font-semibold mb-3">{current.title}</div>
+                      <ul className="space-y-2.5 mb-3">
+                        {current.workout_exercises.map((e) => (
+                          <li key={e.id} className="flex items-center gap-3">
+                            <div className={`fp-checkbox ${e.done ? "done" : ""}`} onClick={() => handleToggleExercise(e.id, e.done)}>
+                              {e.done && <CheckCircle2 size={16} color="#fff" />}
+                            </div>
+                            <div>
+                              <div style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? "var(--ink-soft)" : "var(--ink)" }}>{e.name}</div>
+                              <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(e.sets)}</div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      <button className="fp-btn fp-btn-accent w-full py-2.5" onClick={() => setActiveSession(current)}>
+                        Начать тренировку
+                      </button>
+                    </div>
+                  ) : (
+                    <ComingSoonCard icon={CheckCircle2} title="Все тренировки выполнены" text="Ждите новое задание от тренера." />
+                  )}
+
+                  {history.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold mt-2 mb-2" style={{ color: "var(--ink-soft)" }}>АРХИВ ПРОЙДЕННЫХ ({history.length})</div>
+                      <div className="space-y-2">
+                        {history.map((w) => (
+                          <div key={w.id} className="fp-card p-3 flex items-center justify-between">
+                            <span className="text-sm">{w.title}</span>
+                            <CheckCircle2 size={16} color="var(--accent-2)" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               );
             })()}
           </div>
@@ -708,7 +740,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
   };
 
   return (
-    <div className="min-h-screen px-4 py-6 max-w-lg mx-auto">
+    <div className="min-h-screen fp-safe-top px-4 py-6 max-w-lg mx-auto">
       <button onClick={onBack} className="flex items-center gap-1 text-sm mb-4" style={{ color: "var(--ink-soft)" }}>
         <ChevronLeft size={16} /> К списку клиентов
       </button>
@@ -826,7 +858,7 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
 
   if (showTemplates) {
     return (
-      <div className="min-h-screen py-6">
+      <div className="min-h-screen fp-safe-top py-6">
         <button onClick={() => setShowTemplates(false)} className="flex items-center gap-1 text-sm mb-4 px-4" style={{ color: "var(--ink-soft)" }}>
           <ChevronLeft size={16} /> К обзору
         </button>
@@ -837,7 +869,7 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
 
   if (showMicrocycles) {
     return (
-      <div className="min-h-screen py-6">
+      <div className="min-h-screen fp-safe-top py-6">
         <button onClick={() => setShowMicrocycles(false)} className="flex items-center gap-1 text-sm mb-4 px-4" style={{ color: "var(--ink-soft)" }}>
           <ChevronLeft size={16} /> К обзору
         </button>
@@ -848,7 +880,7 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
 
   if (showLeaderboard) {
     return (
-      <div className="min-h-screen py-6">
+      <div className="min-h-screen fp-safe-top py-6">
         <TrainerLeaderboard trainer={trainer} clients={clients} onBack={() => setShowLeaderboard(false)} />
       </div>
     );
@@ -873,7 +905,7 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
     <div className="min-h-screen fp-page-with-nav">
       <PageHeader eyebrow="ТРЕНЕР" title={trainer.name} subtitle={trainer.spec} />
 
-      <div className="pt-2 pb-6">
+      <div className="fp-content-with-header pb-6">
         {tab === "overview" && (
           <div className="px-4">
             <div className="fp-scoreboard p-5 grid grid-cols-2 gap-4 mb-5">
