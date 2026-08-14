@@ -177,7 +177,7 @@ export function PeriodizationPanel({ client }) {
   const handleCreateWeek = async (week) => {
     setCreating(week.key);
     const exercises = buildWeekExercises(baseWorkout, baselines, week);
-    await createWorkout(client.id, `${baseWorkout.title} — ${week.label}`, exercises);
+    await createWorkout(client.id, baseWorkout.title, exercises);
     setCreated((prev) => ({ ...prev, [week.key]: true }));
     setCreating(null);
   };

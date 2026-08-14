@@ -168,7 +168,7 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
       for (const day of selected.workouts) {
         for (const week of WEEK_PLAN) {
           const exercises = buildPeriodizedExercises(day.exercises, week);
-          await createWorkout(clientId, `${selected.title} — ${day.title} — ${week.label}`, exercises);
+          await createWorkout(clientId, `${selected.title} — ${day.title}`, exercises);
         }
       }
     }

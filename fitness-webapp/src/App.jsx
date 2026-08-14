@@ -593,40 +593,41 @@ function ClientHome({ client, onLogout, authUserId }) {
               <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
             ) : workouts.length === 0 ? (
               <ComingSoonCard icon={Dumbbell} title="Заданий пока нет" text="Тренер ещё не назначил вам тренировку." />
-            ) : (
-              workouts.map((w) => {
-                const doneCount = w.workout_exercises.filter((e) => e.done).length;
-                const totalCount = w.workout_exercises.length;
-                const allDone = totalCount > 0 && doneCount === totalCount;
-                return (
-                  <div key={w.id} className="fp-card p-4">
-                    <div className="font-semibold mb-3">{w.title}</div>
-                    <ul className="space-y-2.5 mb-3">
-                      {w.workout_exercises.map((e) => (
-                        <li key={e.id} className="flex items-center gap-3">
-                          <div className={`fp-checkbox ${e.done ? "done" : ""}`} onClick={() => handleToggleExercise(e.id, e.done)}>
-                            {e.done && <CheckCircle2 size={16} color="#fff" />}
-                          </div>
-                          <div>
-                            <div style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? "var(--ink-soft)" : "var(--ink)" }}>{e.name}</div>
-                            <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(e.sets)}</div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                    {allDone ? (
-                      <div className="w-full py-2.5 text-center text-sm font-semibold" style={{ color: "var(--accent-2)" }}>
-                        Тренировка выполнена ✓
-                      </div>
-                    ) : (
-                      <button className="fp-btn fp-btn-accent w-full py-2.5" onClick={() => setActiveSession(w)}>
-                        Начать тренировку
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
+            ) : (() => {
+              const isAllDone = (w) => {
+                const total = w.workout_exercises.length;
+                const done = w.workout_exercises.filter((e) => e.done).length;
+                return total > 0 && done === total;
+              };
+              const queue = [...workouts].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+              const current = queue.find((w) => !isAllDone(w));
+
+              if (!current) {
+                return <ComingSoonCard icon={CheckCircle2} title="Все тренировки выполнены" text="Ждите новое задание от тренера." />;
+              }
+
+              return (
+                <div className="fp-card p-4">
+                  <div className="font-semibold mb-3">{current.title}</div>
+                  <ul className="space-y-2.5 mb-3">
+                    {current.workout_exercises.map((e) => (
+                      <li key={e.id} className="flex items-center gap-3">
+                        <div className={`fp-checkbox ${e.done ? "done" : ""}`} onClick={() => handleToggleExercise(e.id, e.done)}>
+                          {e.done && <CheckCircle2 size={16} color="#fff" />}
+                        </div>
+                        <div>
+                          <div style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? "var(--ink-soft)" : "var(--ink)" }}>{e.name}</div>
+                          <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(e.sets)}</div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <button className="fp-btn fp-btn-accent w-full py-2.5" onClick={() => setActiveSession(current)}>
+                    Начать тренировку
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         )}
         {tab === "nutrition" && <NutritionTab client={client} />}

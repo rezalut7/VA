@@ -216,10 +216,6 @@ function ExercisePicker({ onAdd }) {
       {!isCardio && (
         <div className="flex flex-col gap-2 mb-3">
           <label className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-soft)" }}>
-            <input type="checkbox" checked={isAssisted} onChange={(e) => setIsAssisted(e.target.checked)} />
-            Ассистируемое (чем больше вес/сопротивление — тем легче, напр. гравитрон, резина)
-          </label>
-          <label className="flex items-center gap-2 text-xs" style={{ color: "var(--ink-soft)" }}>
             <input type="checkbox" checked={periodizationEnabled} onChange={(e) => setPeriodizationEnabled(e.target.checked)} />
             Учитывать в периодизации нагрузки
           </label>
