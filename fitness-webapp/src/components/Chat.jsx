@@ -37,7 +37,7 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
   if (loading) return <p className="text-sm px-4" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 140px)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100vh - 150px)" }}>
       <div className="flex-1 overflow-y-auto px-4 space-y-3 fp-scroll">
         {messages.length === 0 && (
           <p className="text-sm text-center mt-8" style={{ color: "var(--ink-soft)" }}>Сообщений пока нет — напишите первым.</p>

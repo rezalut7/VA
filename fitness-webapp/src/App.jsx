@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
-  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays,
+  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X,
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
@@ -11,7 +11,7 @@ import { ProgressTab, TrainerProgressPanel } from "./components/Progress";
 import { TemplateManager, AssignFromTemplate, PeriodizationPanel } from "./components/Templates";
 import { ExerciseProgressSection, TrainerLeaderboard } from "./components/ExerciseProgress";
 import { MicrocycleManager, AssignMicrocycle } from "./components/Microcycles";
-import { enablePushNotifications, pushSupported } from "./lib/push";
+import { enablePushNotifications, pushSupported, PUSH_ERROR_MESSAGES } from "./lib/push";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
   fetchTrainers, fetchTrainerByAuthId, fetchClientsForTrainer,
@@ -104,8 +104,7 @@ function BottomNav({ items, active, onChange }) {
             className={`fp-bottom-nav-primary ${active === it.key ? "active" : ""}`}
             onClick={() => onChange(it.key)}
           >
-            <span className="fp-bottom-nav-primary-circle"><it.icon size={22} /></span>
-            <span className="label">{it.label}</span>
+            <span className="fp-bottom-nav-primary-circle"><it.icon size={26} /></span>
           </button>
         ) : (
           <button
@@ -552,6 +551,7 @@ function ClientHome({ client, onLogout, authUserId }) {
   const [workouts, setWorkouts] = useState([]);
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
   const [activeSession, setActiveSession] = useState(null);
+  const [viewingWorkout, setViewingWorkout] = useState(null);
   const [pushStatus, setPushStatus] = useState(null);
   const plan = PLANS.find((p) => p.id === client.plan);
   const isVip = client.plan === "vip";
@@ -579,8 +579,12 @@ function ClientHome({ client, onLogout, authUserId }) {
 
   const handleEnablePush = async () => {
     setPushStatus("busy");
-    const res = await enablePushNotifications(authUserId);
-    setPushStatus(res.ok ? "on" : res.reason);
+    try {
+      const res = await enablePushNotifications(authUserId);
+      setPushStatus(res.ok ? "on" : res.reason);
+    } catch (e) {
+      setPushStatus("unexpected");
+    }
   };
 
   if (activeSession) {
@@ -597,9 +601,9 @@ function ClientHome({ client, onLogout, authUserId }) {
 
   return (
     <div className="min-h-screen fp-page-with-nav">
-      {tab !== "chat" && <PageHeader eyebrow="КЛИЕНТ" title={client.name} subtitle={`Тариф «${plan.name}»`} />}
+      <PageHeader eyebrow="КЛИЕНТ" title={client.name} subtitle={`Тариф «${plan.name}»`} />
 
-      <div className={tab === "chat" ? "fp-safe-top pt-4" : "fp-content-with-header pb-6"}>
+      <div className="fp-content-with-header pb-6">
         {tab === "today" && (
           <div className="px-4 space-y-3">
             {loadingWorkouts ? (
@@ -651,9 +655,31 @@ function ClientHome({ client, onLogout, authUserId }) {
                         {history.map((w) => (
                           <div key={w.id} className="fp-card p-3 flex items-center justify-between">
                             <span className="text-sm">{w.title}</span>
-                            <CheckCircle2 size={16} color="var(--accent-2)" />
+                            <div className="flex items-center gap-3">
+                              <button onClick={() => setViewingWorkout(w)} className="flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: "50%", border: "1.5px solid var(--ink-soft)", color: "var(--ink-soft)", fontSize: 11, fontWeight: 700, fontStyle: "italic" }}>i</button>
+                              <CheckCircle2 size={16} color="var(--accent-2)" />
+                            </div>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {viewingWorkout && (
+                    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(22,32,42,0.5)", zIndex: 50 }}>
+                      <div className="fp-card p-5 w-full max-w-sm" style={{ maxHeight: "80vh", overflowY: "auto" }}>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="font-semibold">{viewingWorkout.title}</span>
+                          <button onClick={() => setViewingWorkout(null)}><X size={18} color="var(--ink-soft)" /></button>
+                        </div>
+                        <ul className="text-sm space-y-2">
+                          {viewingWorkout.workout_exercises.map((e) => (
+                            <li key={e.id}>
+                              <div>{e.name}</div>
+                              <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(e.sets)}</div>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     </div>
                   )}
@@ -665,15 +691,7 @@ function ClientHome({ client, onLogout, authUserId }) {
         {tab === "nutrition" && <NutritionTab client={client} />}
         {tab === "progress" && <ProgressTab client={client} />}
         {tab === "chat" && isVip && (
-          <div>
-            <div className="px-4 pb-2">
-              <button onClick={() => setTab("today")} className="flex items-center gap-1 text-sm" style={{ color: "var(--ink-soft)" }}>
-                <ChevronLeft size={16} /> Назад
-              </button>
-              <h2 className="fp-display text-xl font-semibold mt-1">Чат с тренером</h2>
-            </div>
-            <ChatPanel clientId={client.id} currentSender={client.name} senderRole="client" authUserId={authUserId} />
-          </div>
+          <ChatPanel clientId={client.id} currentSender={client.name} senderRole="client" authUserId={authUserId} />
         )}
         {tab === "profile" && (
           <div className="px-4">
@@ -700,7 +718,9 @@ function ClientHome({ client, onLogout, authUserId }) {
                     <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleEnablePush} disabled={pushStatus === "busy"}>
                       {pushStatus === "busy" ? "Включаем…" : "Включить уведомления"}
                     </button>
-                    {pushStatus === "denied" && <p className="text-xs mt-2" style={{ color: "var(--danger)" }}>Уведомления заблокированы в настройках браузера.</p>}
+                    {pushStatus && pushStatus !== "busy" && PUSH_ERROR_MESSAGES[pushStatus] && (
+                      <p className="text-xs mt-2" style={{ color: "var(--danger)" }}>{PUSH_ERROR_MESSAGES[pushStatus]}</p>
+                    )}
                   </>
                 )}
               </div>
@@ -740,31 +760,38 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
   };
 
   return (
-    <div className="min-h-screen fp-safe-top px-4 py-6 max-w-lg mx-auto">
-      <button onClick={onBack} className="flex items-center gap-1 text-sm mb-4" style={{ color: "var(--ink-soft)" }}>
-        <ChevronLeft size={16} /> К списку клиентов
-      </button>
-      <h2 className="fp-display text-2xl font-semibold mb-1">{client.name}</h2>
-      <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)", marginBottom: 16 }}>
-        {PLANS.find((p) => p.id === client.plan)?.name}
-      </Chip>
-
-      <div className="flex gap-4 mb-5 overflow-x-auto fp-scroll" style={{ borderBottom: "1px solid var(--line)" }}>
-        {[
-          { key: "workouts", label: "Тренировки" },
-          { key: "periodization", label: "Периодизация" },
-          { key: "nutrition", label: "Питание" },
-          { key: "progress", label: "Прогресс" },
-          ...(isVip ? [{ key: "chat", label: "Чат" }] : []),
-        ].map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className="text-sm pb-2 whitespace-nowrap"
-            style={{ fontWeight: 600, color: tab === t.key ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === t.key ? "2px solid var(--accent)" : "none" }}
-          >{t.label}</button>
-        ))}
+    <div className="min-h-screen">
+      <div className="fp-fixed-header px-4">
+        <div className="max-w-lg mx-auto">
+          <button onClick={onBack} className="flex items-center gap-1 text-sm mb-2" style={{ color: "var(--ink-soft)" }}>
+            <ChevronLeft size={16} /> К списку клиентов
+          </button>
+          <div className="flex items-center gap-2 mb-2">
+            <h2 className="fp-display text-lg font-semibold">{client.name}</h2>
+            <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>
+              {PLANS.find((p) => p.id === client.plan)?.name}
+            </Chip>
+          </div>
+          <div className="flex gap-4 overflow-x-auto fp-scroll" style={{ borderBottom: "1px solid var(--line)" }}>
+            {[
+              { key: "workouts", label: "Тренировки" },
+              { key: "periodization", label: "Периодизация" },
+              { key: "nutrition", label: "Питание" },
+              { key: "progress", label: "Прогресс" },
+              ...(isVip ? [{ key: "chat", label: "Чат" }] : []),
+            ].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className="text-sm pb-2 whitespace-nowrap"
+                style={{ fontWeight: 600, color: tab === t.key ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === t.key ? "2px solid var(--accent)" : "none" }}
+              >{t.label}</button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      <div className="fp-content-with-tall-header px-4 pb-10 max-w-lg mx-auto">
 
       {tab === "nutrition" ? (
         <TrainerNutritionPanel client={client} onClientUpdated={(updated) => updated && setClient(updated)} />
@@ -839,6 +866,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }
@@ -888,8 +916,12 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
 
   const handleEnablePush = async () => {
     setPushStatus("busy");
-    const res = await enablePushNotifications(authUserId);
-    setPushStatus(res.ok ? "on" : res.reason);
+    try {
+      const res = await enablePushNotifications(authUserId);
+      setPushStatus(res.ok ? "on" : res.reason);
+    } catch (e) {
+      setPushStatus("unexpected");
+    }
   };
 
   const navItems = [
@@ -1001,6 +1033,9 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
                     <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleEnablePush} disabled={pushStatus === "busy"}>
                       {pushStatus === "busy" ? "Включаем…" : "Включить уведомления"}
                     </button>
+                    {pushStatus && pushStatus !== "busy" && PUSH_ERROR_MESSAGES[pushStatus] && (
+                      <p className="text-xs mt-2" style={{ color: "var(--danger)" }}>{PUSH_ERROR_MESSAGES[pushStatus]}</p>
+                    )}
                   </>
                 )}
               </div>

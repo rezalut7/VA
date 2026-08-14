@@ -169,39 +169,28 @@ input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {
 .fp-bottom-nav-primary {
   flex: 1.3;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  min-height: 54px;
-  padding: 0 4px 6px;
+  justify-content: center;
   background: none;
   border: none;
   cursor: pointer;
   color: var(--accent);
 }
 .fp-bottom-nav-primary-circle {
-  width: 52px; height: 52px;
+  width: 62px; height: 62px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: -24px;
+  margin-top: -20px;
   box-shadow: 0 4px 14px rgba(255, 77, 28, 0.4);
   border: 4px solid var(--surface);
   transition: transform 0.12s ease;
 }
 .fp-bottom-nav-primary:active .fp-bottom-nav-primary-circle { transform: scale(0.94); }
 .fp-bottom-nav-primary.active .fp-bottom-nav-primary-circle { background: var(--ink); }
-.fp-bottom-nav-primary .label {
-  font-family: 'Oswald', sans-serif;
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  font-weight: 700;
-}
 
 .fp-page-with-nav {
   padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
@@ -221,6 +210,10 @@ input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {
 
 .fp-content-with-header {
   padding-top: calc(72px + env(safe-area-inset-top, 0px));
+}
+
+.fp-content-with-tall-header {
+  padding-top: calc(150px + env(safe-area-inset-top, 0px));
 }
 
 .fp-safe-top {

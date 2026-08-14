@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Calculator, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { updateClientProfile, setClientGoals, fetchWeeklySessionRate } from "../lib/api";
+import { updateClientProfile, setClientGoals, fetchWeeklySessionRate, fetchCheckins } from "../lib/api";
 
 const ACTIVITY_LEVELS = [
   { max: 1, mult: 1.2, label: "Почти нет тренировок" },
@@ -48,20 +48,46 @@ function calcTargets({ gender, height, weight, age, sessionsPerWeek, goal }) {
 }
 
 export function NutritionCalculator({ client, onProfileSaved, onGoalsApplied }) {
-  const [gender, setGender] = useState(client.gender || "male");
+  // Пол — фиксированный, из анкеты, здесь не меняется.
+  const gender = client.gender || null;
+  // Рост и возраст — из анкеты, тренер может скорректировать при необходимости.
   const [height, setHeight] = useState(client.onboarding?.height || "");
-  const [weight, setWeight] = useState(client.onboarding?.startWeight || "");
   const [age, setAge] = useState(client.age || "");
+  // Вес — подтягивается из последнего чек-ина (по факту), а не из анкеты при регистрации.
+  const [weight, setWeight] = useState("");
+  const [weightSource, setWeightSource] = useState(null); // 'checkin' | 'onboarding' | null
   const [sessionsPerWeek, setSessionsPerWeek] = useState(client.target_sessions_per_week || 3);
   const [busy, setBusy] = useState(false);
   const [actualRate, setActualRate] = useState(null);
+  const [loadingWeight, setLoadingWeight] = useState(true);
 
   useEffect(() => {
     fetchWeeklySessionRate(client.id, 3).then(setActualRate).catch(() => setActualRate(null));
   }, [client.id]);
 
+  useEffect(() => {
+    setLoadingWeight(true);
+    fetchCheckins(client.id)
+      .then((checkins) => {
+        if (checkins.length > 0 && checkins[0].weight) {
+          setWeight(checkins[0].weight);
+          setWeightSource("checkin");
+        } else if (client.onboarding?.startWeight) {
+          setWeight(client.onboarding.startWeight);
+          setWeightSource("onboarding");
+        }
+      })
+      .catch(() => {
+        if (client.onboarding?.startWeight) {
+          setWeight(client.onboarding.startWeight);
+          setWeightSource("onboarding");
+        }
+      })
+      .finally(() => setLoadingWeight(false));
+  }, [client.id]);
+
   const goal = client.onboarding?.goal;
-  const canCalc = height && weight && age;
+  const canCalc = gender && height && weight && age;
   const result = canCalc
     ? calcTargets({ gender, height, weight, age, sessionsPerWeek, goal })
     : null;
@@ -69,7 +95,6 @@ export function NutritionCalculator({ client, onProfileSaved, onGoalsApplied }) 
   const saveProfile = async () => {
     setBusy(true);
     await updateClientProfile(client.id, {
-      gender,
       age: Number(age) || null,
       target_sessions_per_week: Number(sessionsPerWeek) || null,
     });
@@ -107,17 +132,11 @@ export function NutritionCalculator({ client, onProfileSaved, onGoalsApplied }) 
         <h3 className="fp-display font-semibold">Калькулятор КБЖУ</h3>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        <button
-          className="fp-card px-3 py-2 text-sm"
-          style={{ borderColor: gender === "male" ? "var(--accent)" : "var(--line)", borderWidth: gender === "male" ? 1.5 : 1 }}
-          onClick={() => setGender("male")}
-        >Мужчина</button>
-        <button
-          className="fp-card px-3 py-2 text-sm"
-          style={{ borderColor: gender === "female" ? "var(--accent)" : "var(--line)", borderWidth: gender === "female" ? 1.5 : 1 }}
-          onClick={() => setGender("female")}
-        >Женщина</button>
+      <div className="mb-3">
+        <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Пол (из анкеты клиента)</label>
+        <div className="fp-card px-3 py-2 text-sm" style={{ background: "var(--bg)" }}>
+          {gender === "male" ? "Мужчина" : gender === "female" ? "Женщина" : "Не указан — попросите клиента заполнить анкету"}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-3">
@@ -126,8 +145,10 @@ export function NutritionCalculator({ client, onProfileSaved, onGoalsApplied }) 
           <input className="fp-input" type="number" value={height} onChange={(e) => setHeight(e.target.value)} />
         </div>
         <div>
-          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Вес, кг</label>
-          <input className="fp-input" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} />
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>
+            Вес, кг {weightSource === "checkin" && <span style={{ color: "var(--accent-2)" }}>(из чек-ина)</span>}
+          </label>
+          <input className="fp-input" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder={loadingWeight ? "…" : ""} />
         </div>
         <div>
           <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Возраст</label>
@@ -140,7 +161,7 @@ export function NutritionCalculator({ client, onProfileSaved, onGoalsApplied }) 
       </div>
 
       <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
-        Цель по анкете клиента: <b>{goal || "не указана"}</b>
+        Цель по анкете клиента: <b>{goal || "не указана"}</b>. Вес и активность обновляются по факту (чек-ины, тренировки) — при необходимости тренер может скорректировать любое поле вручную, это имеет приоритет.
       </p>
 
       {result ? (
@@ -158,7 +179,9 @@ export function NutritionCalculator({ client, onProfileSaved, onGoalsApplied }) 
           </div>
         </div>
       ) : (
-        <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>Заполните рост, вес и возраст, чтобы увидеть расчёт.</p>
+        <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
+          {gender ? "Заполните рост, вес и возраст, чтобы увидеть расчёт." : "У клиента не указан пол в анкете — расчёт станет доступен после её заполнения."}
+        </p>
       )}
 
       {recommendation && (

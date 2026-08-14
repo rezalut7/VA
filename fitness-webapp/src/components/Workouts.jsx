@@ -309,6 +309,8 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   const [cardio, setCardio] = useState({ running: false, elapsedSec: 0 });
   const [confirmExit, setConfirmExit] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [exerciseNotes, setExerciseNotes] = useState({});
+  const [sessionNote, setSessionNote] = useState("");
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -348,10 +350,12 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
     setFinishing(true);
     const exercisesPayload = exercises.map((ex) => ({
       id: ex.id, name: ex.name, plannedSets: ex.sets, actualSets: log[ex.id].sets, done: log[ex.id].done,
+      note: (exerciseNotes[ex.id] || "").trim() || null,
     }));
     await onFinish({
       workoutId: workout.id, title: workout.title, startedAt,
       finishedAt: Date.now(), durationSec: elapsedSec, exercises: exercisesPayload,
+      note: sessionNote.trim() || null,
     });
   };
 
@@ -400,19 +404,41 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
           <div className="space-y-2.5">
             {exLog.sets.map((s, idx) => (
               <div key={idx} className="flex items-center gap-2">
-                <div className={`fp-checkbox ${s.done ? "done" : ""}`} style={{ borderRadius: 8 }} onClick={() => toggleSetDone(idx)}>
-                  {s.done && <CheckCircle2 size={14} color="#fff" />}
-                </div>
                 <span className="text-xs w-4" style={{ color: "var(--ink-soft)" }}>{idx + 1}</span>
                 <input className="fp-input" style={{ width: 64 }} value={s.reps} onChange={(e) => updateSet(idx, { reps: e.target.value })} />
                 <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
                 <input className="fp-input" style={{ width: 72 }} value={s.weight} onChange={(e) => updateSet(idx, { weight: e.target.value })} placeholder="кг" />
                 <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
-                <span className="text-xs ml-auto" style={{ color: "var(--ink-soft)" }}>
+                <span className="text-xs ml-auto mr-1" style={{ color: "var(--ink-soft)" }}>
                   план {exercise.sets[idx].reps}{exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}
                 </span>
+                <div className={`fp-checkbox ${s.done ? "done" : ""}`} style={{ borderRadius: 8 }} onClick={() => toggleSetDone(idx)}>
+                  {s.done && <CheckCircle2 size={14} color="#fff" />}
+                </div>
               </div>
             ))}
+          </div>
+        )}
+
+        <div className="mt-4">
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Комментарий к упражнению (необязательно)</label>
+          <input
+            className="fp-input"
+            placeholder="Например: тяжело давалось, была боль в плече…"
+            value={exerciseNotes[exercise.id] || ""}
+            onChange={(e) => setExerciseNotes((prev) => ({ ...prev, [exercise.id]: e.target.value }))}
+          />
+        </div>
+
+        {isLast && (
+          <div className="mt-4">
+            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Комментарий к тренировке в целом (необязательно)</label>
+            <input
+              className="fp-input"
+              placeholder="Как прошла тренировка?"
+              value={sessionNote}
+              onChange={(e) => setSessionNote(e.target.value)}
+            />
           </div>
         )}
 
