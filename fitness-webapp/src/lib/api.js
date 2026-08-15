@@ -189,10 +189,10 @@ export async function fetchWorkoutsForClient(clientId) {
   }));
 }
 
-export async function createWorkout(clientId, title, items) {
+export async function createWorkout(clientId, title, items, periodizationWeek) {
   const { data: workout, error } = await supabase
     .from("workouts")
-    .insert({ client_id: clientId, title })
+    .insert({ client_id: clientId, title, periodization_week: periodizationWeek || null })
     .select()
     .single();
   if (error) throw error;
