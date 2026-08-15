@@ -6,6 +6,7 @@ import {
   fetchProgress, fetchWorkoutsForClient, fetchNutritionLoggingDays,
 } from "../lib/api";
 import { ExerciseProgressSection } from "./ExerciseProgress";
+import { AchievementsSection } from "./Achievements";
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function humanDate(iso) {
@@ -299,6 +300,8 @@ export function ProgressTab({ client }) {
 
   return (
     <div className="px-4">
+      <AchievementsSection client={client} />
+
       <div className="fp-card p-5 mb-5" style={{ borderColor: meta.color, borderWidth: 1.5 }}>
         <div className="flex items-center gap-2 mb-3">
           <Sparkles size={16} color={meta.color} />
