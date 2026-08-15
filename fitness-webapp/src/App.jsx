@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
-  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X, BookOpen,
+  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X, BookOpen, Trash2,
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
@@ -17,7 +17,7 @@ import {
   getSession, onAuthChange, signUp, signIn, signOut,
   fetchTrainerByAuthId, fetchClientsForTrainer,
   fetchClientByAuthId, createClientProfile, activateSubscription, completeOnboarding, updateClientProfile,
-  fetchWorkoutsForClient, createWorkout, toggleExerciseDone, saveWorkoutSession,
+  fetchWorkoutsForClient, createWorkout, deleteWorkout, toggleExerciseDone, saveWorkoutSession,
 } from "./lib/api";
 
 const PLANS = [
@@ -730,6 +730,12 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
     load();
   };
 
+  const handleDeleteWorkout = async (workoutId) => {
+    if (!window.confirm("Удалить эту тренировку у клиента?")) return;
+    setWorkouts((prev) => prev.filter((w) => w.id !== workoutId));
+    await deleteWorkout(workoutId);
+  };
+
   return (
     <div className="min-h-screen">
       <div className="fp-fixed-header px-4">
@@ -814,11 +820,20 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack }) {
             <div className="space-y-3">
               {workouts.map((w) => {
                 const doneCount = w.workout_exercises.filter((e) => e.done).length;
+                const totalCount = w.workout_exercises.length;
+                const notCompleted = totalCount === 0 || doneCount < totalCount;
                 return (
                   <div key={w.id} className="fp-card p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="font-semibold">{w.title}</div>
-                      <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>{doneCount}/{w.workout_exercises.length}</Chip>
+                      <div className="flex items-center gap-2">
+                        <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>{doneCount}/{totalCount}</Chip>
+                        {notCompleted && (
+                          <button onClick={() => handleDeleteWorkout(w.id)} title="Удалить (клиент ещё не прошёл)">
+                            <Trash2 size={15} color="var(--danger)" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <ul className="text-sm space-y-1">
                       {w.workout_exercises.map((e) => (
