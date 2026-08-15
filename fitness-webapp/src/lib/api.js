@@ -595,3 +595,12 @@ export async function upsertExerciseDetail(name, description, videoUrl) {
     .upsert({ name, description, video_url: videoUrl, updated_at: new Date().toISOString() }, { onConflict: "name" });
   if (error) throw error;
 }
+
+export async function uploadExerciseVideo(file) {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${Date.now()}-${safeName}`;
+  const { error } = await supabase.storage.from("exercise-videos").upload(path, file, { upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from("exercise-videos").getPublicUrl(path);
+  return data.publicUrl;
+}
