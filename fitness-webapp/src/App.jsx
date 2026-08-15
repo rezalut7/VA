@@ -11,6 +11,7 @@ import { ProgressTab, TrainerProgressPanel } from "./components/Progress";
 import { TemplateManager, AssignFromTemplate, PeriodizationPanel } from "./components/Templates";
 import { ExerciseProgressSection, TrainerLeaderboard } from "./components/ExerciseProgress";
 import { MicrocycleManager, AssignMicrocycle } from "./components/Microcycles";
+import { WEEK_TYPE_META } from "./lib/periodizationEngine";
 import { ExerciseLibraryManager } from "./components/ExerciseLibrary";
 import { enablePushNotifications, pushSupported, PUSH_ERROR_MESSAGES } from "./lib/push";
 import {
@@ -19,13 +20,6 @@ import {
   fetchClientByAuthId, createClientProfile, activateSubscription, completeOnboarding, updateClientProfile,
   fetchWorkoutsForClient, createWorkout, deleteWorkout, toggleExerciseDone, saveWorkoutSession,
 } from "./lib/api";
-
-const PERIODIZATION_WEEK_META = {
-  light: { label: "Лёгкая неделя", color: "var(--accent-2)", clientNote: "Лёгкая неделя. Вес и объём — как база, без рекордов. Цель — плавно втянуться и наработать технику перед ростом нагрузки." },
-  medium: { label: "Средняя неделя", color: "#D9A441", clientNote: "Средняя неделя. Вес и число повторений немного выросли — начинаем нагружать сильнее, но без надрыва." },
-  heavy: { label: "Тяжёлая неделя", color: "var(--accent)", clientNote: "Тяжёлая неделя — пик блока. Вес заметно выше, повторений меньше. Это самая сложная неделя цикла, отдыхай между подходами как следует." },
-  deload: { label: "Разгрузка", color: "var(--ink-soft)", clientNote: "Неделя разгрузки. Вес и объём специально снижены — это не отдых от тренировок, а часть плана: телу нужно восстановиться, чтобы дальше расти." },
-};
 
 const PLANS = [
   {
@@ -602,12 +596,12 @@ function ClientHome({ client, onLogout, authUserId }) {
 
               return (
                 <>
-                  {current && PERIODIZATION_WEEK_META[current.periodization_week] && (
-                    <div className="fp-card p-3" style={{ borderColor: PERIODIZATION_WEEK_META[current.periodization_week].color, borderWidth: 1.5, background: "var(--bg)" }}>
-                      <Chip style={{ background: PERIODIZATION_WEEK_META[current.periodization_week].color, color: "#fff", marginBottom: 6 }}>
-                        {PERIODIZATION_WEEK_META[current.periodization_week].label}
+                  {current && WEEK_TYPE_META[current.periodization_week] && (
+                    <div className="fp-card p-3" style={{ borderColor: WEEK_TYPE_META[current.periodization_week].color, borderWidth: 1.5, background: "var(--bg)" }}>
+                      <Chip style={{ background: WEEK_TYPE_META[current.periodization_week].color, color: "#fff", marginBottom: 6 }}>
+                        {WEEK_TYPE_META[current.periodization_week].label}
                       </Chip>
-                      <p className="text-xs">{PERIODIZATION_WEEK_META[current.periodization_week].clientNote}</p>
+                      <p className="text-xs">{WEEK_TYPE_META[current.periodization_week].clientNote}</p>
                     </div>
                   )}
                   {current ? (
@@ -837,7 +831,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
                 const doneCount = w.workout_exercises.filter((e) => e.done).length;
                 const totalCount = w.workout_exercises.length;
                 const notCompleted = totalCount === 0 || doneCount < totalCount;
-                const weekMeta = PERIODIZATION_WEEK_META[w.periodization_week];
+                const weekMeta = WEEK_TYPE_META[w.periodization_week];
                 return (
                   <div key={w.id} className="fp-card p-4">
                     <div className="flex items-center justify-between mb-2">
