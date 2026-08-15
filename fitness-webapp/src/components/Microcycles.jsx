@@ -165,8 +165,11 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
         );
       }
     } else {
-      for (const day of selected.workouts) {
-        for (const week of WEEK_PLAN) {
+      // Важно: сначала перебираем недели, потом дни — так клиент получает
+      // сначала все тренировки лёгкой недели по порядку микроцикла, потом
+      // все тренировки средней и т.д., а не все 4 недели одного дня подряд.
+      for (const week of WEEK_PLAN) {
+        for (const day of selected.workouts) {
           const exercises = buildPeriodizedExercises(day.exercises, week);
           await createWorkout(clientId, `${selected.title} — ${day.title}`, exercises);
         }

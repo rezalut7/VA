@@ -374,22 +374,22 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
         </div>
       </div>
 
-      <div className="fp-bar-track mb-4"><div className="fp-bar-fill" style={{ width: `${(doneCount / totalExercises) * 100}%`, background: "var(--accent-2)" }} /></div>
+      <div className="fp-bar-track mb-3"><div className="fp-bar-fill" style={{ width: `${(doneCount / totalExercises) * 100}%`, background: "var(--accent-2)" }} /></div>
 
-      <div className="fp-card p-5 mb-4 flex-1">
-        <div className="fp-display text-xl font-semibold mb-4">{exercise.name}</div>
+      <div className="fp-card p-4 mb-3 flex-1">
+        <div className="fp-display text-lg font-semibold mb-2.5">{exercise.name}</div>
 
         <ExerciseDescriptionBlock detail={exerciseDetail} loading={exerciseDetailLoading} />
 
         {isCardio ? (
           <div>
-            <div className="fp-card p-4 mb-4 text-center" style={{ background: "var(--bg)" }}>
+            <div className="fp-card p-3 mb-3 text-center" style={{ background: "var(--bg)" }}>
               <div className="text-xs mb-1" style={{ color: "var(--ink-soft)" }}>Цель</div>
-              <div className="fp-display text-2xl font-bold">{exercise.sets[0].reps}</div>
+              <div className="fp-display text-xl font-bold">{exercise.sets[0].reps}</div>
             </div>
             {cardioIsTimed && (
-              <div className="fp-card p-4 mb-4 text-center" style={{ background: "var(--bg)" }}>
-                <div className="fp-display text-3xl font-bold mb-3">{formatDuration(cardio.elapsedSec)}</div>
+              <div className="fp-card p-3 mb-3 text-center" style={{ background: "var(--bg)" }}>
+                <div className="fp-display text-2xl font-bold mb-2">{formatDuration(cardio.elapsedSec)}</div>
                 <button className="fp-btn fp-btn-outline px-5 py-2 text-sm inline-flex items-center gap-2" onClick={() => setCardio((c) => ({ ...c, running: !c.running }))}>
                   {cardio.running ? <Pause size={14} /> : <Play size={14} />}
                   {cardio.running ? "Пауза" : "Старт"}
@@ -397,7 +397,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
               </div>
             )}
             <button
-              className="fp-btn w-full py-3 flex items-center justify-center gap-2"
+              className="fp-btn w-full py-2.5 flex items-center justify-center gap-2"
               style={exLog.done ? { background: "var(--accent-2)", color: "#fff" } : { background: "var(--bg)", color: "var(--ink)" }}
               onClick={toggleCardioDone}
             >
@@ -405,19 +405,19 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
             </button>
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {exLog.sets.map((s, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <span className="text-xs w-4" style={{ color: "var(--ink-soft)" }}>{idx + 1}</span>
-                <input className="fp-input" style={{ width: 64 }} value={s.reps} onChange={(e) => updateSet(idx, { reps: e.target.value })} />
+                <input className="fp-input" style={{ width: 60, padding: "6px 8px" }} value={s.reps} onChange={(e) => updateSet(idx, { reps: e.target.value })} />
                 <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
-                <input className="fp-input" style={{ width: 72 }} value={s.weight} onChange={(e) => updateSet(idx, { weight: e.target.value })} placeholder="кг" />
+                <input className="fp-input" style={{ width: 68, padding: "6px 8px" }} value={s.weight} onChange={(e) => updateSet(idx, { weight: e.target.value })} placeholder="кг" />
                 <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
                 <span className="text-xs ml-auto mr-1" style={{ color: "var(--ink-soft)" }}>
                   план {exercise.sets[idx].reps}{exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}
                 </span>
-                <div className={`fp-checkbox ${s.done ? "done" : ""}`} style={{ borderRadius: 8 }} onClick={() => toggleSetDone(idx)}>
-                  {s.done && <CheckCircle2 size={14} color="#fff" />}
+                <div className={`fp-checkbox ${s.done ? "done" : ""}`} style={{ borderRadius: 8, width: 24, height: 24 }} onClick={() => toggleSetDone(idx)}>
+                  {s.done && <CheckCircle2 size={13} color="#fff" />}
                 </div>
               </div>
             ))}
@@ -425,35 +425,35 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
         )}
 
         {rest.active && !isCardio && (
-          <div className="fp-card p-3 mt-4 flex items-center justify-between" style={{ background: "var(--bg)" }}>
-            <span className="text-sm flex items-center gap-2"><Timer size={14} color="var(--accent)" /> Отдых: {formatDuration(rest.secondsLeft)}</span>
+          <div className="fp-card p-2.5 mt-3 flex items-center justify-between" style={{ background: "var(--bg)" }}>
+            <span className="text-xs flex items-center gap-1.5"><Timer size={13} color="var(--accent)" /> Отдых: {formatDuration(rest.secondsLeft)}</span>
             <button className="text-xs" style={{ color: "var(--accent)" }} onClick={() => setRest({ active: false, secondsLeft: 0 })}>Пропустить</button>
           </div>
         )}
 
-        <div className="mt-4">
-          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Комментарий к упражнению (необязательно)</label>
+        <div className="mt-3">
           <input
             className="fp-input"
-            placeholder="Например: тяжело давалось, была боль в плече…"
+            style={{ fontSize: 12, padding: "7px 10px" }}
+            placeholder="Комментарий к упражнению (необязательно)"
             value={exerciseNotes[exercise.id] || ""}
             onChange={(e) => setExerciseNotes((prev) => ({ ...prev, [exercise.id]: e.target.value }))}
           />
         </div>
 
         {isLast && (
-          <div className="mt-4">
-            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Комментарий к тренировке в целом (необязательно)</label>
+          <div className="mt-2">
             <input
               className="fp-input"
-              placeholder="Как прошла тренировка?"
+              style={{ fontSize: 12, padding: "7px 10px" }}
+              placeholder="Комментарий к тренировке в целом (необязательно)"
               value={sessionNote}
               onChange={(e) => setSessionNote(e.target.value)}
             />
           </div>
         )}
 
-        <div className="mt-4">
+        <div className="mt-3">
           <ExerciseVideoBlock detail={exerciseDetail} loading={exerciseDetailLoading} title={exercise.name} />
         </div>
       </div>

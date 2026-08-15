@@ -15,9 +15,10 @@ function daysBetween(a, b) { return Math.floor((a.getTime() - b.getTime()) / 864
 
 /* ------------------------------ ЧЕК-ИНЫ ------------------------------ */
 
-function RatingPicker({ value, onChange, labelLow, labelHigh }) {
+function RatingPicker({ title, value, onChange, labelLow, labelHigh }) {
   return (
     <div>
+      <div className="text-xs mb-1.5" style={{ color: "var(--ink-soft)" }}>{title}</div>
       <div className="flex gap-1.5 mb-1">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
@@ -96,8 +97,8 @@ function CheckinForm({ clientId, onAdded }) {
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-3">
-        <RatingPicker value={energy} onChange={setEnergy} labelLow="Энергия: низкая" labelHigh="высокая" />
-        <RatingPicker value={adherence} onChange={setAdherence} labelLow="План: не следовал" labelHigh="следовал" />
+        <RatingPicker title="Энергия" value={energy} onChange={setEnergy} labelLow="низкая" labelHigh="высокая" />
+        <RatingPicker title="План" value={adherence} onChange={setAdherence} labelLow="не следовал" labelHigh="следовал" />
       </div>
 
       <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Заметка (необязательно)</label>

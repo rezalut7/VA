@@ -296,31 +296,44 @@ export function useExerciseDetail(fullExerciseName) {
 }
 
 export function ExerciseDescriptionBlock({ detail, loading }) {
+  const [open, setOpen] = useState(false);
   if (loading || !detail || !detail.description) return null;
   return (
-    <div className="fp-card p-3 mb-4" style={{ background: "var(--bg)" }}>
-      <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
-        <PlayCircle size={13} /> О ТЕХНИКЕ
-      </div>
-      <div className="space-y-1.5">
-        {splitDescriptionParagraphs(detail.description).map((para, i) => {
-          const m = para.match(/^(Подготовка|Движение|Контроль):\s*([\s\S]*)$/);
-          return (
-            <p key={i} className="text-xs">
-              {m ? <><b>{m[1]}:</b> {m[2]}</> : para}
-            </p>
-          );
-        })}
-      </div>
+    <div className="fp-card p-2.5 mb-3" style={{ background: "var(--bg)" }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between gap-1.5 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
+        <span className="flex items-center gap-1.5"><PlayCircle size={13} /> О ТЕХНИКЕ</span>
+        <span style={{ color: "var(--accent)" }}>{open ? "Скрыть ▲" : "Показать ▼"}</span>
+      </button>
+      {open && (
+        <div className="space-y-1.5 mt-2">
+          {splitDescriptionParagraphs(detail.description).map((para, i) => {
+            const m = para.match(/^(Подготовка|Движение|Контроль):\s*([\s\S]*)$/);
+            return (
+              <p key={i} className="text-xs">
+                {m ? <><b>{m[1]}:</b> {m[2]}</> : para}
+              </p>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 export function ExerciseVideoBlock({ detail, loading, title }) {
+  const [open, setOpen] = useState(false);
   if (loading || !detail || !detail.video_url) return null;
   return (
-    <div className="mb-4" style={{ maxWidth: 320, margin: "0 auto 16px" }}>
-      <SquareVideoPlayer src={detail.video_url} title={title} />
+    <div className="fp-card p-2.5 mb-3" style={{ background: "var(--bg)" }}>
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between gap-1.5 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
+        <span className="flex items-center gap-1.5"><Video size={13} /> ВИДЕО</span>
+        <span style={{ color: "var(--accent)" }}>{open ? "Скрыть ▲" : "Показать ▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-2" style={{ maxWidth: 280, margin: "8px auto 0" }}>
+          <SquareVideoPlayer src={detail.video_url} title={title} />
+        </div>
+      )}
     </div>
   );
 }
