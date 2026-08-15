@@ -609,3 +609,21 @@ export async function uploadExerciseVideo(file) {
   const { data } = supabase.storage.from("exercise-videos").getPublicUrl(path);
   return data.publicUrl;
 }
+
+/* ------------------------------ ДОСТИЖЕНИЯ ------------------------------ */
+
+export async function fetchClientAchievements(clientId) {
+  const { data, error } = await supabase
+    .from("client_achievements")
+    .select("*")
+    .eq("client_id", clientId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function addClientAchievement(clientId, achievementKey) {
+  const { error } = await supabase
+    .from("client_achievements")
+    .insert({ client_id: clientId, achievement_key: achievementKey });
+  if (error && error.code !== "23505") throw error; // 23505 = уже есть, это нормально
+}
