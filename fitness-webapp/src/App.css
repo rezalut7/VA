@@ -16,6 +16,22 @@
   --danger: #D6432E;
 }
 
+[data-theme="dark"] {
+  --bg: #12161B;
+  --surface: #1B2027;
+  --ink: #F1F3F1;
+  --ink-soft: #8B96A0;
+  --accent: #FF6A3D;
+  --accent-ink: #12161B;
+  --accent-2: #17C9AF;
+  --line: #2B333C;
+  --danger: #FF6B5C;
+}
+
+body {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
 html, body, #root {
   min-height: 100%;
   overscroll-behavior-y: none;
@@ -119,7 +135,7 @@ input.fp-input, select.fp-input, textarea.fp-input {
   font-family: 'Inter', sans-serif;
   font-size: 16px;
   width: 100%;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
 }
 input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {

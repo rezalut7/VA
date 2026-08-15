@@ -13,7 +13,7 @@ import { ExerciseProgressSection, TrainerLeaderboard } from "./components/Exerci
 import { MicrocycleManager, AssignMicrocycle } from "./components/Microcycles";
 import { WEEK_TYPE_META } from "./lib/periodizationEngine";
 import { ExerciseLibraryManager } from "./components/ExerciseLibrary";
-import { enablePushNotifications, pushSupported, PUSH_ERROR_MESSAGES } from "./lib/push";
+import { enablePushNotifications, disablePushNotifications, pushSupported, PUSH_ERROR_MESSAGES } from "./lib/push";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
   fetchTrainerByAuthId, fetchClientsForTrainer,
@@ -518,13 +518,14 @@ function OnboardingForm({ client, onDone }) {
   );
 }
 
-function ClientHome({ client, onLogout, authUserId }) {
+function ClientHome({ client, onLogout, authUserId, theme, setTheme }) {
   const [tab, setTab] = useState("today");
   const [workouts, setWorkouts] = useState([]);
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
   const [activeSession, setActiveSession] = useState(null);
   const [viewingWorkout, setViewingWorkout] = useState(null);
   const [pushStatus, setPushStatus] = useState(null);
+  const [pushDetail, setPushDetail] = useState("");
   const plan = PLANS.find((p) => p.id === client.plan);
   const isVip = client.plan === "vip";
 
@@ -551,12 +552,21 @@ function ClientHome({ client, onLogout, authUserId }) {
 
   const handleEnablePush = async () => {
     setPushStatus("busy");
+    setPushDetail("");
     try {
       const res = await enablePushNotifications(authUserId);
       setPushStatus(res.ok ? "on" : res.reason);
+      if (res.detail) setPushDetail(res.detail);
     } catch (e) {
       setPushStatus("unexpected");
+      setPushDetail(e.message || "");
     }
+  };
+
+  const handleDisablePush = async () => {
+    setPushStatus("busy");
+    await disablePushNotifications();
+    setPushStatus(null);
   };
 
   if (activeSession) {
@@ -683,13 +693,34 @@ function ClientHome({ client, onLogout, authUserId }) {
               </div>
             </div>
 
+            <div className="fp-card p-4 mb-3">
+              <div className="text-xs mb-2 font-semibold" style={{ color: "var(--ink-soft)" }}>ОФОРМЛЕНИЕ</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setTheme("light")}
+                  className="fp-card px-3 py-2 text-sm flex items-center justify-center gap-1.5"
+                  style={{ borderColor: theme === "light" ? "var(--accent)" : "var(--line)", borderWidth: theme === "light" ? 1.5 : 1 }}
+                >☀️ Светлая</button>
+                <button
+                  onClick={() => setTheme("dark")}
+                  className="fp-card px-3 py-2 text-sm flex items-center justify-center gap-1.5"
+                  style={{ borderColor: theme === "dark" ? "var(--accent)" : "var(--line)", borderWidth: theme === "dark" ? 1.5 : 1 }}
+                >🌙 Тёмная</button>
+              </div>
+            </div>
+
             {pushSupported() && (
               <div className="fp-card p-4 mb-3">
                 <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
                   <Bell size={13} /> УВЕДОМЛЕНИЯ
                 </div>
                 {pushStatus === "on" ? (
-                  <p className="text-xs" style={{ color: "var(--accent-2)" }}>Уведомления включены ✓</p>
+                  <>
+                    <p className="text-xs mb-2" style={{ color: "var(--accent-2)" }}>Уведомления включены ✓</p>
+                    <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleDisablePush} disabled={pushStatus === "busy"}>
+                      Отключить уведомления
+                    </button>
+                  </>
                 ) : (
                   <>
                     <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>
@@ -699,7 +730,10 @@ function ClientHome({ client, onLogout, authUserId }) {
                       {pushStatus === "busy" ? "Включаем…" : "Включить уведомления"}
                     </button>
                     {pushStatus && pushStatus !== "busy" && PUSH_ERROR_MESSAGES[pushStatus] && (
-                      <p className="text-xs mt-2" style={{ color: "var(--danger)" }}>{PUSH_ERROR_MESSAGES[pushStatus]}</p>
+                      <div className="mt-2">
+                        <p className="text-xs" style={{ color: "var(--danger)" }}>{PUSH_ERROR_MESSAGES[pushStatus]}</p>
+                        {pushDetail && <p className="text-xs mt-1" style={{ color: "var(--ink-soft)" }}>Подробности: {pushDetail}</p>}
+                      </div>
                     )}
                   </>
                 )}
@@ -870,7 +904,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
   );
 }
 
-function TrainerHome({ trainer, clients, onLogout, authUserId }) {
+function TrainerHome({ trainer, clients, onLogout, authUserId, theme, setTheme }) {
   const [tab, setTab] = useState("overview");
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedClientTab, setSelectedClientTab] = useState("workouts");
@@ -879,6 +913,7 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showExerciseLibrary, setShowExerciseLibrary] = useState(false);
   const [pushStatus, setPushStatus] = useState(null);
+  const [pushDetail, setPushDetail] = useState("");
   const vipClients = clients.filter((c) => c.plan === "vip");
 
   if (selectedClient) {
@@ -928,12 +963,21 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
 
   const handleEnablePush = async () => {
     setPushStatus("busy");
+    setPushDetail("");
     try {
       const res = await enablePushNotifications(authUserId);
       setPushStatus(res.ok ? "on" : res.reason);
+      if (res.detail) setPushDetail(res.detail);
     } catch (e) {
       setPushStatus("unexpected");
+      setPushDetail(e.message || "");
     }
+  };
+
+  const handleDisablePush = async () => {
+    setPushStatus("busy");
+    await disablePushNotifications();
+    setPushStatus(null);
   };
 
   const navItems = [
@@ -1039,13 +1083,34 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
 
         {tab === "profile" && (
           <div className="px-4">
+            <div className="fp-card p-4 mb-3">
+              <div className="text-xs mb-2 font-semibold" style={{ color: "var(--ink-soft)" }}>ОФОРМЛЕНИЕ</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setTheme("light")}
+                  className="fp-card px-3 py-2 text-sm flex items-center justify-center gap-1.5"
+                  style={{ borderColor: theme === "light" ? "var(--accent)" : "var(--line)", borderWidth: theme === "light" ? 1.5 : 1 }}
+                >☀️ Светлая</button>
+                <button
+                  onClick={() => setTheme("dark")}
+                  className="fp-card px-3 py-2 text-sm flex items-center justify-center gap-1.5"
+                  style={{ borderColor: theme === "dark" ? "var(--accent)" : "var(--line)", borderWidth: theme === "dark" ? 1.5 : 1 }}
+                >🌙 Тёмная</button>
+              </div>
+            </div>
+
             {pushSupported() && (
               <div className="fp-card p-4 mb-3">
                 <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
                   <Bell size={13} /> УВЕДОМЛЕНИЯ
                 </div>
                 {pushStatus === "on" ? (
-                  <p className="text-xs" style={{ color: "var(--accent-2)" }}>Уведомления включены ✓</p>
+                  <>
+                    <p className="text-xs mb-2" style={{ color: "var(--accent-2)" }}>Уведомления включены ✓</p>
+                    <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleDisablePush} disabled={pushStatus === "busy"}>
+                      Отключить уведомления
+                    </button>
+                  </>
                 ) : (
                   <>
                     <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>Получайте push о новых сообщениях от клиентов.</p>
@@ -1053,7 +1118,10 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
                       {pushStatus === "busy" ? "Включаем…" : "Включить уведомления"}
                     </button>
                     {pushStatus && pushStatus !== "busy" && PUSH_ERROR_MESSAGES[pushStatus] && (
-                      <p className="text-xs mt-2" style={{ color: "var(--danger)" }}>{PUSH_ERROR_MESSAGES[pushStatus]}</p>
+                      <div className="mt-2">
+                        <p className="text-xs" style={{ color: "var(--danger)" }}>{PUSH_ERROR_MESSAGES[pushStatus]}</p>
+                        {pushDetail && <p className="text-xs mt-1" style={{ color: "var(--ink-soft)" }}>Подробности: {pushDetail}</p>}
+                      </div>
                     )}
                   </>
                 )}
@@ -1079,6 +1147,12 @@ export default function App() {
   const [screen, setScreen] = useState("login");
   const [trainer, setTrainer] = useState(null);
   const [client, setClient] = useState(null);
+  const [theme, setTheme] = useState(() => localStorage.getItem("fp-theme") || "light");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("fp-theme", theme);
+  }, [theme]);
 
   const resolveRole = async (currentSession) => {
     if (!currentSession) { setTrainer(null); setClient(null); setLoading(false); return; }
@@ -1115,12 +1189,12 @@ export default function App() {
     return <LoginScreen onEnter={() => setScreen("entry")} />;
   }
 
-  if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} />;
+  if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} />;
 
   if (client) {
     if (!client.subscription_active) return <SubscribeGate client={client} onPaid={setClient} />;
     if (!client.onboarding_complete) return <OnboardingForm client={client} onDone={setClient} />;
-    return <ClientHome client={client} onLogout={handleLogout} authUserId={session.user.id} />;
+    return <ClientHome client={client} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} />;
   }
 
   return (
