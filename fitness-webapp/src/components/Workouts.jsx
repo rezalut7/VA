@@ -346,6 +346,14 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   const toggleCardioDone = () => {
     setLog((prev) => ({ ...prev, [exercise.id]: { ...prev[exercise.id], done: !prev[exercise.id].done } }));
   };
+  const addExtraSet = () => {
+    setLog((prev) => {
+      const exState = prev[exercise.id];
+      const last = exState.sets[exState.sets.length - 1] || { reps: "10", weight: "" };
+      const nextSets = [...exState.sets, { reps: last.reps, weight: last.weight, done: false }];
+      return { ...prev, [exercise.id]: { sets: nextSets, done: false } };
+    });
+  };
   const cardioIsTimed = isCardio && /мин|час/.test(exercise.sets[0].reps);
 
   const finish = async () => {
@@ -414,13 +422,16 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
                 <input className="fp-input" style={{ width: 68, padding: "6px 8px" }} value={s.weight} onChange={(e) => updateSet(idx, { weight: e.target.value })} placeholder="кг" />
                 <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
                 <span className="text-xs ml-auto mr-1" style={{ color: "var(--ink-soft)" }}>
-                  план {exercise.sets[idx].reps}{exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}
+                  {exercise.sets[idx] ? `план ${exercise.sets[idx].reps}${exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}` : "доп. подход"}
                 </span>
                 <div className={`fp-checkbox ${s.done ? "done" : ""}`} style={{ borderRadius: 8, width: 24, height: 24 }} onClick={() => toggleSetDone(idx)}>
                   {s.done && <CheckCircle2 size={13} color="#fff" />}
                 </div>
               </div>
             ))}
+            <button onClick={addExtraSet} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
+              <Plus size={12} /> Добавить подход
+            </button>
           </div>
         )}
 

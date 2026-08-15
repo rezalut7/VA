@@ -102,11 +102,33 @@ export function AssignFromTemplate({ trainer, clientId, onAssigned }) {
 /* ------------------------------ ПЕРИОДИЗАЦИЯ ------------------------------ */
 
 export const WEEK_PLAN = [
-  { key: "base", label: "Неделя 1 — база", weightMult: 1.0, setsMult: 1, note: "Точка отсчёта — средний рабочий вес за последние тренировки." },
-  { key: "build", label: "Неделя 2 — рост объёма", weightMult: 1.05, setsMult: 1, note: "Вес +5%, тот же объём." },
-  { key: "peak", label: "Неделя 3 — пик интенсивности", weightMult: 1.1, setsMult: 1, note: "Вес +10% — пиковая нагрузка блока." },
-  { key: "deload", label: "Неделя 4 — разгрузка (deload)", weightMult: 0.65, setsMult: 0.75, note: "Вес и объём вниз — даём ЦНС и суставам восстановиться перед новым циклом." },
+  {
+    key: "base", dbTag: "light", label: "Лёгкая неделя", weightMult: 1.0, setsMult: 1, repDelta: 0,
+    note: "Точка отсчёта — средний рабочий вес за последние тренировки.",
+    clientNote: "Лёгкая неделя. Вес и объём — как база, без рекордов. Цель — плавно втянуться и наработать технику перед ростом нагрузки.",
+  },
+  {
+    key: "build", dbTag: "medium", label: "Средняя неделя", weightMult: 1.05, setsMult: 1, repDelta: 1,
+    note: "Вес +5%, чуть больше повторений — растим объём.",
+    clientNote: "Средняя неделя. Вес и число повторений немного выросли — начинаем нагружать сильнее, но без надрыва.",
+  },
+  {
+    key: "peak", dbTag: "heavy", label: "Тяжёлая неделя", weightMult: 1.1, setsMult: 1, repDelta: -2,
+    note: "Вес +10%, повторений меньше — пиковая интенсивность блока.",
+    clientNote: "Тяжёлая неделя — пик блока. Вес заметно выше, повторений меньше. Это самая сложная неделя цикла, отдыхай между подходами как следует.",
+  },
+  {
+    key: "deload", dbTag: "deload", label: "Разгрузка", weightMult: 0.65, setsMult: 0.75, repDelta: -2,
+    note: "Вес и объём вниз — даём ЦНС и суставам восстановиться перед новым циклом.",
+    clientNote: "Неделя разгрузки. Вес и объём специально снижены — это не отдых от тренировок, а часть плана: телу нужно восстановиться, чтобы дальше расти.",
+  },
 ];
+
+export function adjustReps(baseReps, delta) {
+  const n = parseInt(baseReps, 10);
+  if (isNaN(n)) return baseReps; // нечисловые значения (напр. время для кардио) не трогаем
+  return String(Math.max(1, n + delta));
+}
 
 function exerciseBaseline(exerciseName, sessions) {
   const weights = [];
@@ -139,7 +161,8 @@ function buildWeekExercises(baseWorkout, baselines, week) {
     if (!baseline || ex.periodization_enabled === false) return { ...passthrough, sets: ex.sets };
     const targetCount = Math.max(1, Math.round(ex.sets.length * week.setsMult));
     const weight = Math.max(0, Math.round(baseline.avgWeight * effectiveWeightMult(ex, week)));
-    const sets = Array.from({ length: targetCount }, () => ({ reps: baseline.reps, weight: String(weight) }));
+    const reps = adjustReps(baseline.reps, week.repDelta);
+    const sets = Array.from({ length: targetCount }, () => ({ reps, weight: String(weight) }));
     return { ...passthrough, sets };
   });
 }
@@ -177,7 +200,7 @@ export function PeriodizationPanel({ client }) {
   const handleCreateWeek = async (week) => {
     setCreating(week.key);
     const exercises = buildWeekExercises(baseWorkout, baselines, week);
-    await createWorkout(client.id, baseWorkout.title, exercises);
+    await createWorkout(client.id, baseWorkout.title, exercises, week.dbTag);
     setCreated((prev) => ({ ...prev, [week.key]: true }));
     setCreating(null);
   };
@@ -240,10 +263,11 @@ export function PeriodizationPanel({ client }) {
                     const b = baselines[ex.name];
                     if (!b) return <li key={ex.id} style={{ color: "var(--ink-soft)" }}>{ex.name} — недостаточно данных</li>;
                     const weight = Math.max(0, Math.round(b.avgWeight * effectiveWeightMult(ex, week)));
+                    const reps = adjustReps(b.reps, week.repDelta);
                     const count = Math.max(1, Math.round(ex.sets.length * week.setsMult));
                     return (
                       <li key={ex.id}>
-                        {ex.name}{ex.is_assisted ? " (ассист.)" : ""} — {count} × {b.reps} × {weight} кг
+                        {ex.name}{ex.is_assisted ? " (ассист.)" : ""} — {count} × {reps} × {weight} кг
                       </li>
                     );
                   })}

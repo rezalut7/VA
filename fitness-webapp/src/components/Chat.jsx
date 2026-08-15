@@ -49,7 +49,9 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
               <div
                 className="p-2.5"
                 style={{
-                  maxWidth: "75%", borderRadius: 12,
+                  maxWidth: "75%", borderRadius: 14,
+                  borderBottomRightRadius: mine ? 4 : 14,
+                  borderBottomLeftRadius: mine ? 14 : 4,
                   background: mine ? "var(--accent)" : "var(--bg)",
                   color: mine ? "#fff" : "var(--ink)",
                 }}

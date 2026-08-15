@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Trash2, CalendarDays, Zap, Plus, X } from "lucide-react";
 import { AssignWorkoutForm, formatSets } from "./Workouts";
-import { WEEK_PLAN, effectiveWeightMult } from "./Templates";
+import { WEEK_PLAN, effectiveWeightMult, adjustReps } from "./Templates";
 import { fetchMicrocycles, createMicrocycle, deleteMicrocycle, createWorkout } from "../lib/api";
 
 function MicrocycleBuilder({ onSave, onCancel }) {
@@ -149,7 +149,7 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
       const mult = effectiveWeightMult(ex, week);
       const weight = Math.max(0, Math.round(baseWeight * mult));
       const count = Math.max(1, Math.round(ex.sets.length * week.setsMult));
-      const reps = ex.sets[0]?.reps || "10";
+      const reps = adjustReps(ex.sets[0]?.reps || "10", week.repDelta);
       const sets = Array.from({ length: count }, () => ({ reps, weight: String(weight) }));
       return { ...passthrough, sets };
     });
@@ -171,7 +171,7 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
       for (const week of WEEK_PLAN) {
         for (const day of selected.workouts) {
           const exercises = buildPeriodizedExercises(day.exercises, week);
-          await createWorkout(clientId, `${selected.title} — ${day.title}`, exercises);
+          await createWorkout(clientId, `${selected.title} — ${day.title}`, exercises, week.dbTag);
         }
       }
     }
