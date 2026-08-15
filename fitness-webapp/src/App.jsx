@@ -69,7 +69,7 @@ function PageHeader({ eyebrow, title, subtitle, onLogout }) {
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <Chip style={{ background: "var(--ink)", color: "#fff", flexShrink: 0 }}>{eyebrow}</Chip>
+            <Chip style={{ background: "var(--solid-dark)", color: "#fff", flexShrink: 0 }}>{eyebrow}</Chip>
             <h1 className="fp-display text-base font-bold truncate">{title}</h1>
           </div>
           {subtitle && <p className="text-xs mt-0.5 truncate" style={{ color: "var(--ink-soft)" }}>{subtitle}</p>}
@@ -87,7 +87,7 @@ function PageHeader({ eyebrow, title, subtitle, onLogout }) {
 function ComingSoonCard({ icon: Icon, title, text }) {
   return (
     <div className="fp-card p-6 text-center mx-4" style={{ background: "var(--bg)" }}>
-      <div className="w-11 h-11 rounded-full mx-auto flex items-center justify-center mb-3" style={{ background: "var(--ink)" }}>
+      <div className="w-11 h-11 rounded-full mx-auto flex items-center justify-center mb-3" style={{ background: "var(--solid-dark)" }}>
         <Icon size={18} color="#fff" />
       </div>
       <div className="fp-display font-semibold mb-1">{title}</div>
@@ -154,7 +154,7 @@ function LoginScreen({ onEnter }) {
         <div className="grid sm:grid-cols-2 gap-4">
           {benefits.map((b) => (
             <div key={b.title} className="fp-card p-5">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center mb-3" style={{ background: "var(--ink)" }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center mb-3" style={{ background: "var(--solid-dark)" }}>
                 <b.icon size={18} color="#fff" />
               </div>
               <div className="fp-display font-semibold mb-1">{b.title}</div>
@@ -163,7 +163,7 @@ function LoginScreen({ onEnter }) {
           ))}
         </div>
 
-        <div className="fp-card p-6 mt-4 text-center" style={{ background: "var(--ink)", color: "#fff" }}>
+        <div className="fp-card p-6 mt-4 text-center" style={{ background: "var(--solid-dark)", color: "#fff" }}>
           <div className="fp-display text-xl font-semibold mb-2">Тарифы от 990 ₽/мес</div>
           <p className="text-sm mb-4" style={{ opacity: 0.8 }}>
             От самостоятельного дневника питания до полного VIP-сопровождения с чатом с тренером — выбираете при регистрации.
@@ -413,7 +413,7 @@ function OnboardingForm({ client, onDone }) {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-10">
       <div className="fp-card p-7 w-full max-w-lg">
-        <Chip style={{ background: "var(--ink)", color: "#fff", marginBottom: 12 }}>АНКЕТА · ШАГ {step + 1} ИЗ {steps.length}</Chip>
+        <Chip style={{ background: "var(--solid-dark)", color: "#fff", marginBottom: 12 }}>АНКЕТА · ШАГ {step + 1} ИЗ {steps.length}</Chip>
         <h2 className="fp-display text-2xl font-semibold mb-1">{steps[step].title}</h2>
         <div className="fp-bar-track mb-5"><div className="fp-bar-fill" style={{ width: `${((step + 1) / steps.length) * 100}%`, background: "var(--accent)" }} /></div>
 
@@ -1147,7 +1147,7 @@ export default function App() {
   const [screen, setScreen] = useState("login");
   const [trainer, setTrainer] = useState(null);
   const [client, setClient] = useState(null);
-  const [theme, setTheme] = useState(() => localStorage.getItem("fp-theme") || "light");
+  const [theme, setTheme] = useState(() => localStorage.getItem("fp-theme") || "dark");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);

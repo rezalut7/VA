@@ -14,6 +14,11 @@
   --accent-2: #0EA394;
   --line: #DFE3E0;
   --danger: #D6432E;
+  /* Фиксированный тёмный цвет для плашек/шапок/бейджей с белым текстом —
+     специально НЕ меняется между темами (в отличие от --ink, который и есть
+     "цвет текста", светлеющий в тёмной теме — поэтому его нельзя было
+     использовать как фон для таких элементов, получалось белое на белом). */
+  --solid-dark: #16202A;
 }
 
 [data-theme="dark"] {
@@ -84,7 +89,7 @@ button, a {
 .fp-btn-accent { background: var(--accent); color: var(--accent-ink); }
 .fp-btn-accent:hover { opacity: 0.9; }
 .fp-btn-outline { background: transparent; border: 1.5px solid var(--ink); color: var(--ink); }
-.fp-btn-outline:hover { background: var(--ink); color: #fff; }
+.fp-btn-outline:hover { background: var(--solid-dark); color: #fff; }
 
 .fp-chip {
   border-radius: 999px;
@@ -111,7 +116,7 @@ button, a {
 }
 .fp-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
 
-.fp-scoreboard { background: var(--ink); color: #fff; border-radius: 16px; }
+.fp-scoreboard { background: var(--solid-dark); color: #fff; border-radius: 16px; }
 .fp-scoreboard .num { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 30px; line-height: 1; }
 
 .fp-checkbox {
@@ -206,7 +211,7 @@ input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {
   transition: transform 0.12s ease;
 }
 .fp-bottom-nav-primary:active .fp-bottom-nav-primary-circle { transform: scale(0.94); }
-.fp-bottom-nav-primary.active .fp-bottom-nav-primary-circle { background: var(--ink); }
+.fp-bottom-nav-primary.active .fp-bottom-nav-primary-circle { background: var(--solid-dark); }
 
 .fp-page-with-nav {
   padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
