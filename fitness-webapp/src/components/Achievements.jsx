@@ -75,7 +75,7 @@ export function AchievementsSection({ client }) {
 
       {celebrating && (
         <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(22,32,42,0.6)", zIndex: 60 }}>
-          <div className="fp-card p-6 w-full max-w-xs text-center" style={{ background: "#fff" }}>
+          <div className="fp-card p-6 w-full max-w-xs text-center" style={{ background: "var(--surface)" }}>
             <button onClick={() => setCelebrating(null)} className="float-right"><X size={18} color="var(--ink-soft)" /></button>
             <div style={{ fontSize: 48 }} className="mb-2">{celebrating.icon}</div>
             <div className="fp-display text-lg font-bold mb-1">Новое достижение!</div>

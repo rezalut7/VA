@@ -297,6 +297,7 @@ export function AssignWorkoutForm({ onAssign, onCancel }) {
 
 export function WorkoutSession({ workout, onExit, onFinish }) {
   const [exIndex, setExIndex] = useState(0);
+  const [exerciseOrder, setExerciseOrder] = useState(workout.workout_exercises);
   const [log, setLog] = useState(() => {
     const initial = {};
     workout.workout_exercises.forEach((ex) => {
@@ -322,7 +323,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
     return () => clearInterval(t);
   }, []);
 
-  const exercises = workout.workout_exercises;
+  const exercises = exerciseOrder;
   const exercise = exercises[exIndex];
   const isCardio = exercise.name.startsWith("Кардио");
   const exLog = log[exercise.id];
@@ -330,6 +331,18 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   const doneCount = Object.values(log).filter((l) => l.done).length;
   const isLast = exIndex === totalExercises - 1;
   const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(exercise.name);
+
+  // Тренажёр занят — переносим текущее упражнение на позицию сразу после
+  // следующего, не отмечая выполненным. exIndex не меняем — после свапа
+  // на этом месте окажется то, что раньше шло следующим.
+  const postponeExercise = () => {
+    if (exIndex >= exercises.length - 1) return;
+    setExerciseOrder((prev) => {
+      const arr = [...prev];
+      [arr[exIndex], arr[exIndex + 1]] = [arr[exIndex + 1], arr[exIndex]];
+      return arr;
+    });
+  };
 
   const updateSet = (setIdx, patch) => {
     setLog((prev) => {
@@ -479,6 +492,16 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
           <button className="fp-btn fp-btn-accent flex-1 py-2.5" onClick={() => setExIndex((i) => Math.min(totalExercises - 1, i + 1))}>Далее →</button>
         )}
       </div>
+
+      {!isLast && (
+        <button
+          className="text-xs mt-2 flex items-center justify-center gap-1 w-full"
+          style={{ color: "var(--ink-soft)" }}
+          onClick={postponeExercise}
+        >
+          Тренажёр занят — перенести это упражнение на потом
+        </button>
+      )}
 
       {confirmExit && (
         <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(22,32,42,0.5)" }}>

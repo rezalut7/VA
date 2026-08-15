@@ -49,31 +49,38 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
               <div
                 className="p-2.5"
                 style={{
-                  maxWidth: "75%", borderRadius: 14,
-                  borderBottomRightRadius: mine ? 4 : 14,
-                  borderBottomLeftRadius: mine ? 14 : 4,
-                  background: mine ? "var(--accent)" : "var(--bg)",
+                  maxWidth: "75%", borderRadius: 16,
+                  borderBottomRightRadius: mine ? 5 : 16,
+                  borderBottomLeftRadius: mine ? 16 : 5,
+                  background: mine ? "#0A84FF" : "var(--surface)",
                   color: mine ? "#fff" : "var(--ink)",
+                  border: mine ? "none" : "1px solid var(--line)",
+                  boxShadow: mine ? "none" : "0 1px 2px rgba(0,0,0,0.04)",
                 }}
               >
-                {!mine && <div className="text-xs font-semibold mb-0.5" style={{ opacity: 0.7 }}>{m.from_name}</div>}
-                <div className="text-sm">{m.text}</div>
+                {!mine && <div className="text-xs font-semibold mb-0.5" style={{ opacity: 0.6 }}>{m.from_name}</div>}
+                <div className="text-sm" style={{ lineHeight: 1.35 }}>{m.text}</div>
               </div>
             </div>
           );
         })}
         <div ref={bottomRef} />
       </div>
-      <div className="flex gap-2 px-4 py-3" style={{ borderTop: "1px solid var(--line)" }}>
+      <div className="flex items-center gap-2 px-4 py-3" style={{ borderTop: "1px solid var(--line)" }}>
         <input
           className="fp-input"
+          style={{ borderRadius: 20 }}
           placeholder="Написать сообщение…"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
         />
-        <button className="fp-btn fp-btn-accent px-4 flex items-center justify-center" onClick={submit}>
-          <Send size={16} />
+        <button
+          className="flex items-center justify-center flex-shrink-0"
+          style={{ width: 34, height: 34, borderRadius: "50%", background: text.trim() ? "#0A84FF" : "var(--line)", color: "#fff", border: "none" }}
+          onClick={submit}
+        >
+          <Send size={15} />
         </button>
       </div>
     </div>
