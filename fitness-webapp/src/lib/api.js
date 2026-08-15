@@ -226,6 +226,7 @@ export async function saveWorkoutSession(clientId, payload) {
     finished_at: new Date(payload.finishedAt).toISOString(),
     duration_sec: payload.durationSec,
     exercises: payload.exercises,
+    note: payload.note || null,
   });
   if (error) throw error;
 
