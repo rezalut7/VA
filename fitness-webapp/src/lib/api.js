@@ -212,6 +212,11 @@ export async function createWorkout(clientId, title, items) {
   return workout;
 }
 
+export async function deleteWorkout(workoutId) {
+  const { error } = await supabase.from("workouts").delete().eq("id", workoutId);
+  if (error) throw error;
+}
+
 export async function toggleExerciseDone(exerciseId, done) {
   const { error } = await supabase.from("workout_exercises").update({ done }).eq("id", exerciseId);
   if (error) throw error;
