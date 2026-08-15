@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, X, Trash2, ArrowUp, ArrowDown, Timer, Play, Pause, Flag, CheckCircle2 } from "lucide-react";
 import { EXERCISE_GROUPS } from "../data/exerciseGroups";
-import { ExerciseInfoPanel } from "./ExerciseLibrary";
+import { useExerciseDetail, ExerciseDescriptionBlock, ExerciseVideoBlock } from "./ExerciseLibrary";
 
 /* --------------------------------- HELPERS -------------------------------- */
 
@@ -329,6 +329,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   const totalExercises = exercises.length;
   const doneCount = Object.values(log).filter((l) => l.done).length;
   const isLast = exIndex === totalExercises - 1;
+  const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(exercise.name);
 
   const updateSet = (setIdx, patch) => {
     setLog((prev) => {
@@ -361,7 +362,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   };
 
   return (
-    <div className="min-h-screen px-4 py-6 max-w-lg mx-auto flex flex-col">
+    <div className="min-h-screen fp-safe-top px-4 pb-6 max-w-lg mx-auto flex flex-col" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 24px)" }}>
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="fp-display text-lg font-semibold">{workout.title}</div>
@@ -378,7 +379,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
       <div className="fp-card p-5 mb-4 flex-1">
         <div className="fp-display text-xl font-semibold mb-4">{exercise.name}</div>
 
-        <ExerciseInfoPanel fullExerciseName={exercise.name} />
+        <ExerciseDescriptionBlock detail={exerciseDetail} loading={exerciseDetailLoading} />
 
         {isCardio ? (
           <div>
@@ -423,6 +424,13 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
           </div>
         )}
 
+        {rest.active && !isCardio && (
+          <div className="fp-card p-3 mt-4 flex items-center justify-between" style={{ background: "var(--bg)" }}>
+            <span className="text-sm flex items-center gap-2"><Timer size={14} color="var(--accent)" /> Отдых: {formatDuration(rest.secondsLeft)}</span>
+            <button className="text-xs" style={{ color: "var(--accent)" }} onClick={() => setRest({ active: false, secondsLeft: 0 })}>Пропустить</button>
+          </div>
+        )}
+
         <div className="mt-4">
           <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Комментарий к упражнению (необязательно)</label>
           <input
@@ -445,12 +453,9 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
           </div>
         )}
 
-        {rest.active && !isCardio && (
-          <div className="fp-card p-3 mt-4 flex items-center justify-between" style={{ background: "var(--bg)" }}>
-            <span className="text-sm flex items-center gap-2"><Timer size={14} color="var(--accent)" /> Отдых: {formatDuration(rest.secondsLeft)}</span>
-            <button className="text-xs" style={{ color: "var(--accent)" }} onClick={() => setRest({ active: false, secondsLeft: 0 })}>Пропустить</button>
-          </div>
-        )}
+        <div className="mt-4">
+          <ExerciseVideoBlock detail={exerciseDetail} loading={exerciseDetailLoading} title={exercise.name} />
+        </div>
       </div>
 
       <div className="flex gap-2">
