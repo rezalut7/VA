@@ -113,7 +113,7 @@ export function TrainerInbox({ trainer, clients, onOpenChat }) {
           onClick={() => onOpenChat(client)}
           className="fp-card w-full p-3 flex items-center gap-3 text-left"
         >
-          <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--ink)" }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--solid-dark)" }}>
             <MessageCircle size={16} color="#fff" />
           </div>
           <div className="flex-1 min-w-0">
