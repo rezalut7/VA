@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
-  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X,
+  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X, BookOpen,
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
@@ -11,10 +11,11 @@ import { ProgressTab, TrainerProgressPanel } from "./components/Progress";
 import { TemplateManager, AssignFromTemplate, PeriodizationPanel } from "./components/Templates";
 import { ExerciseProgressSection, TrainerLeaderboard } from "./components/ExerciseProgress";
 import { MicrocycleManager, AssignMicrocycle } from "./components/Microcycles";
+import { ExerciseLibraryManager } from "./components/ExerciseLibrary";
 import { enablePushNotifications, pushSupported, PUSH_ERROR_MESSAGES } from "./lib/push";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
-  fetchTrainers, fetchTrainerByAuthId, fetchClientsForTrainer,
+  fetchTrainerByAuthId, fetchClientsForTrainer,
   fetchClientByAuthId, createClientProfile, activateSubscription, completeOnboarding, updateClientProfile,
   fetchWorkoutsForClient, createWorkout, toggleExerciseDone, saveWorkoutSession,
 } from "./lib/api";
@@ -123,81 +124,51 @@ function BottomNav({ items, active, onChange }) {
 
 /* -------------------------------- SCREENS -------------------------------- */
 
-function LoginScreen({ trainers, onPickTrainerLogin, onPickClientEntry }) {
+function LoginScreen({ onEnter }) {
+  const benefits = [
+    { icon: Dumbbell, title: "Персональные тренировки", text: "Тренер составляет план под вашу цель и следит за прогрессом каждую неделю." },
+    { icon: Apple, title: "Дневник питания", text: "База из тысяч продуктов, расчёт КБЖУ и готовый рацион от тренера." },
+    { icon: TrendingUp, title: "Реальный прогресс", text: "Чек-ины с фото, замеры и честная аналитика — на чём вы стоите и что дальше." },
+    { icon: MessageCircle, title: "Связь с тренером", text: "Чат на VIP-тарифе — вопрос решается сразу, а не в следующий раз в зале." },
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
-      <div className="text-center mb-10 max-w-xl">
-        <Chip style={{ background: "var(--accent)", color: "#fff", marginBottom: 16 }}>
+    <div className="min-h-screen">
+      <div className="flex flex-col items-center justify-center px-4 pt-16 pb-12 text-center">
+        <Chip style={{ background: "var(--accent)", color: "#fff", marginBottom: 18 }}>
           <Dumbbell size={13} /> ОНЛАЙН-ТРЕНИРОВКИ
         </Chip>
-        <h1 className="fp-display text-4xl md:text-5xl font-bold mb-3">Форма. Питание. Прогресс.</h1>
-        <p style={{ color: "var(--ink-soft)" }}>
-          Персональные тренировки, дневник питания и отслеживание прогресса — в одном месте.
+        <h1 className="fp-display text-4xl md:text-6xl font-bold mb-4 max-w-2xl">Форма. Питание. Прогресс.</h1>
+        <p className="text-base md:text-lg mb-8 max-w-xl" style={{ color: "var(--ink-soft)" }}>
+          Персональный тренер, дневник питания и честный прогресс — в одном приложении.
+          Не абстрактная программа из интернета, а план под вас, который меняется по ходу дела.
         </p>
+        <button onClick={onEnter} className="fp-btn fp-btn-accent px-8 py-3.5 text-base">
+          Начать заниматься
+        </button>
+        <p className="text-xs mt-3" style={{ color: "var(--ink-soft)" }}>Регистрация в приложении — не в мессенджере и не через таблички</p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 w-full max-w-4xl">
-        {trainers.map((t) => (
-          <button key={t.id} onClick={onPickTrainerLogin} className="fp-card p-6 text-left hover:shadow-md transition-shadow">
-            <div className="w-11 h-11 rounded-full flex items-center justify-center mb-4" style={{ background: "var(--ink)" }}>
-              <User size={20} color="#fff" />
+      <div className="px-4 pb-16 max-w-4xl mx-auto">
+        <div className="grid sm:grid-cols-2 gap-4">
+          {benefits.map((b) => (
+            <div key={b.title} className="fp-card p-5">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center mb-3" style={{ background: "var(--ink)" }}>
+                <b.icon size={18} color="#fff" />
+              </div>
+              <div className="fp-display font-semibold mb-1">{b.title}</div>
+              <p className="text-sm" style={{ color: "var(--ink-soft)" }}>{b.text}</p>
             </div>
-            <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)", marginBottom: 8 }}>ТРЕНЕР</Chip>
-            <div className="fp-display text-xl font-semibold mb-1">{t.name}</div>
-            <div className="text-sm mb-2" style={{ color: "var(--accent)" }}>{t.spec}</div>
-            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>{t.bio}</p>
-          </button>
-        ))}
+          ))}
+        </div>
 
-        <button
-          onClick={onPickClientEntry}
-          className="fp-card p-6 text-left hover:shadow-md transition-shadow"
-          style={{ borderColor: "var(--accent)", borderWidth: 1.5 }}
-        >
-          <div className="w-11 h-11 rounded-full flex items-center justify-center mb-4" style={{ background: "var(--accent)" }}>
-            <Sparkles size={20} color="#fff" />
-          </div>
-          <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)", marginBottom: 8 }}>КЛИЕНТ</Chip>
-          <div className="fp-display text-xl font-semibold mb-1">Зарегистрироваться</div>
-          <p className="text-sm" style={{ color: "var(--ink-soft)" }}>
-            Выберите тариф, оформите подписку и получите доступ к заданиям, дневнику питания и прогрессу.
+        <div className="fp-card p-6 mt-4 text-center" style={{ background: "var(--ink)", color: "#fff" }}>
+          <div className="fp-display text-xl font-semibold mb-2">Тарифы от 990 ₽/мес</div>
+          <p className="text-sm mb-4" style={{ opacity: 0.8 }}>
+            От самостоятельного дневника питания до полного VIP-сопровождения с чатом с тренером — выбираете при регистрации.
           </p>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function TrainerLoginScreen({ onBack, onLoggedIn }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const submit = async () => {
-    setBusy(true); setError("");
-    try {
-      await signIn(email, password);
-      onLoggedIn();
-    } catch (e) {
-      setError("Не получилось войти — проверьте email и пароль.");
-    }
-    setBusy(false);
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="fp-card p-7 w-full max-w-sm">
-        <button onClick={onBack} className="flex items-center gap-1 text-sm mb-5" style={{ color: "var(--ink-soft)" }}>
-          <ChevronLeft size={16} /> Назад
-        </button>
-        <h2 className="fp-display text-2xl font-semibold mb-5">Вход для тренера</h2>
-        <input className="fp-input mb-3" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input className="fp-input mb-4" type="password" placeholder="Пароль" value={password} onChange={(e) => setPassword(e.target.value)} />
-        {error && <p className="text-sm mb-3" style={{ color: "var(--danger)" }}>{error}</p>}
-        <button className="fp-btn fp-btn-accent w-full py-2.5 disabled:opacity-50" disabled={busy} onClick={submit}>
-          {busy ? "Входим…" : "Войти"}
-        </button>
+          <button onClick={onEnter} className="fp-btn fp-btn-accent px-6 py-2.5">Выбрать тариф</button>
+        </div>
       </div>
     </div>
   );
@@ -877,6 +848,7 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
   const [showTemplates, setShowTemplates] = useState(false);
   const [showMicrocycles, setShowMicrocycles] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showExerciseLibrary, setShowExerciseLibrary] = useState(false);
   const [pushStatus, setPushStatus] = useState(null);
   const vipClients = clients.filter((c) => c.plan === "vip");
 
@@ -902,6 +874,17 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
           <ChevronLeft size={16} /> К обзору
         </button>
         <MicrocycleManager trainer={trainer} />
+      </div>
+    );
+  }
+
+  if (showExerciseLibrary) {
+    return (
+      <div className="min-h-screen fp-safe-top py-6">
+        <button onClick={() => setShowExerciseLibrary(false)} className="flex items-center gap-1 text-sm mb-4 px-4" style={{ color: "var(--ink-soft)" }}>
+          <ChevronLeft size={16} /> К обзору
+        </button>
+        <ExerciseLibraryManager />
       </div>
     );
   }
@@ -958,12 +941,19 @@ function TrainerHome({ trainer, clients, onLogout, authUserId }) {
               </div>
               <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Управлять →</span>
             </button>
-            <button onClick={() => setShowLeaderboard(true)} className="fp-card w-full p-3 mb-5 flex items-center justify-between text-left">
+            <button onClick={() => setShowLeaderboard(true)} className="fp-card w-full p-3 mb-3 flex items-center justify-between text-left">
               <div className="flex items-center gap-2">
                 <Trophy size={16} color="var(--accent)" />
                 <span className="text-sm font-medium">Рейтинг по упражнению</span>
               </div>
               <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Смотреть →</span>
+            </button>
+            <button onClick={() => setShowExerciseLibrary(true)} className="fp-card w-full p-3 mb-5 flex items-center justify-between text-left">
+              <div className="flex items-center gap-2">
+                <BookOpen size={16} color="var(--accent)" />
+                <span className="text-sm font-medium">Библиотека упражнений</span>
+              </div>
+              <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Редактировать →</span>
             </button>
             {attentionClients.length > 0 && (
               <div className="mb-5">
@@ -1058,11 +1048,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [screen, setScreen] = useState("login");
-  const [trainers, setTrainers] = useState([]);
   const [trainer, setTrainer] = useState(null);
   const [client, setClient] = useState(null);
-
-  useEffect(() => { fetchTrainers().then(setTrainers).catch(() => {}); }, []);
 
   const resolveRole = async (currentSession) => {
     if (!currentSession) { setTrainer(null); setClient(null); setLoading(false); return; }
@@ -1092,9 +1079,11 @@ export default function App() {
   if (loading) return <div className="min-h-screen flex items-center justify-center text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</div>;
 
   if (!session) {
-    if (screen === "trainer-login") return <TrainerLoginScreen onBack={() => setScreen("login")} onLoggedIn={() => {}} />;
-    if (screen === "client-entry") return <ClientEntryScreen onBack={() => setScreen("login")} onLoggedIn={() => {}} />;
-    return <LoginScreen trainers={trainers} onPickTrainerLogin={() => setScreen("trainer-login")} onPickClientEntry={() => setScreen("client-entry")} />;
+    // Один общий вход: и клиент, и тренер попадают сюда и вводят свою почту —
+    // после входа роль определяется автоматически (resolveRole выше), без
+    // отдельной кнопки «Я тренер». Тренерские аккаунты создаются вручную в Supabase.
+    if (screen === "entry") return <ClientEntryScreen onBack={() => setScreen("login")} onLoggedIn={() => {}} />;
+    return <LoginScreen onEnter={() => setScreen("entry")} />;
   }
 
   if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} />;
