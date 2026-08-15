@@ -3,7 +3,7 @@ import { BookOpen, Save, Video, Search, PlayCircle, Upload, X, Info } from "luci
 import { EXERCISE_GROUPS } from "../data/exerciseGroups";
 import { fetchAllExerciseDetails, fetchExerciseDetail, upsertExerciseDetail, uploadExerciseVideo } from "../lib/api";
 
-// Рекомендуемый формат для загрузки видео — показывается тренеру и упоминается тут для справки:
+// Рекомендуемый формат для загрузки видео:
 export const VIDEO_UPLOAD_GUIDE = {
   aspectRatio: "1:1 (квадрат)",
   resolution: "1080×1080 px",
@@ -29,17 +29,18 @@ export function equipmentOptionsFor(baseName) {
   return [...opts];
 }
 
-// Ключ в exercise_details: "Упражнение — Снаряд" для конкретной вариации,
-// либо просто "Упражнение", если вариаций нет или выбрано "Общее".
+// Ключ строки с ВИДЕО для конкретной вариации: "Упражнение — Снаряд".
+// Описание, в отличие от видео, всегда хранится под простым именем упражнения
+// (без снаряда) — оно одно на все вариации.
 export function detailKey(baseName, equipment) {
   return equipment ? `${baseName} — ${equipment}` : baseName;
 }
 
 // Полное название в тренировке — "Группа - Упражнение - Снаряд - Вариант"
-// (либо только "Группа - Упражнение - Вариант", если у упражнения нет снаряда —
-// тогда вариант "сдвигается" на место снаряда). Пробуем все правдоподобные
-// ключи по очереди, с общим названием как последним запасным вариантом.
-export function extractDetailKeys(fullName) {
+// (либо "Группа - Упражнение - Вариант", если снаряда нет — тогда вариант
+// "сдвигается" на его место). Возвращает правдоподобные ключи ВИДЕО по убыванию
+// специфичности; описание ищется отдельно, всегда по базовому имени.
+export function extractVideoKeys(fullName) {
   const parts = (fullName || "").split(" - ");
   const base = parts.length >= 2 ? parts[1] : fullName;
   const keys = [];
@@ -47,6 +48,10 @@ export function extractDetailKeys(fullName) {
   if (parts[3]) keys.push(detailKey(base, parts[3]));
   keys.push(base);
   return keys;
+}
+export function extractBaseName(fullName) {
+  const parts = (fullName || "").split(" - ");
+  return parts.length >= 2 ? parts[1] : fullName;
 }
 
 function isDirectVideoFile(url) {
@@ -57,20 +62,13 @@ function toYoutubeEmbedUrl(url) {
   return yt ? `https://www.youtube.com/embed/${yt[1]}` : url;
 }
 
-// Квадратный плеер 1:1 — единый для тренера и клиента, playsInline обязателен
-// для iOS (иначе видео открывается на весь экран поверх страницы), preload
-// metadata — чтобы не грузить весь файл на мобильном интернете сразу.
+// Квадратный плеер 1:1 — playsInline обязателен для iOS (иначе видео разворачивается
+// на весь экран поверх страницы), preload metadata — не грузит весь файл сразу.
 function SquareVideoPlayer({ src, title }) {
   if (isDirectVideoFile(src)) {
     return (
       <div style={{ width: "100%", aspectRatio: "1 / 1", borderRadius: 10, overflow: "hidden", background: "#000" }}>
-        <video
-          src={src}
-          controls
-          playsInline
-          preload="metadata"
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
+        <video src={src} controls playsInline preload="metadata" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </div>
     );
   }
@@ -110,26 +108,21 @@ export function ExerciseLibraryManager() {
   const names = allBaseExerciseNames().filter((n) => n.toLowerCase().includes(query.toLowerCase()));
   const equipmentOptions = selectedExercise ? equipmentOptionsFor(selectedExercise) : [];
 
-  const loadFields = (exercise, equipment) => {
-    const key = equipment === GENERAL_KEY ? detailKey(exercise, null) : detailKey(exercise, equipment);
-    const existing = details[key];
-    setDescription(existing?.description || "");
-    setVideoUrl(existing?.video_url || "");
-  };
-
   const pickExercise = (name) => {
     setSelectedExercise(name);
     setSelectedEquipment(GENERAL_KEY);
     setSaved(false);
     setUploadError("");
-    loadFields(name, GENERAL_KEY);
+    setDescription(details[name]?.description || "");
+    setVideoUrl(details[name]?.video_url || "");
   };
 
   const pickEquipment = (eq) => {
     setSelectedEquipment(eq);
     setSaved(false);
     setUploadError("");
-    loadFields(selectedExercise, eq);
+    const key = eq === GENERAL_KEY ? selectedExercise : detailKey(selectedExercise, eq);
+    setVideoUrl(details[key]?.video_url || "");
   };
 
   const handleUpload = async (e) => {
@@ -153,8 +146,14 @@ export function ExerciseLibraryManager() {
   const save = async () => {
     if (!selectedExercise) return;
     setBusy(true);
-    const key = selectedEquipment === GENERAL_KEY ? detailKey(selectedExercise, null) : detailKey(selectedExercise, selectedEquipment);
-    await upsertExerciseDetail(key, description.trim(), videoUrl.trim());
+    if (selectedEquipment === GENERAL_KEY) {
+      await upsertExerciseDetail(selectedExercise, description.trim(), videoUrl.trim());
+    } else {
+      const generalVideo = details[selectedExercise]?.video_url || null;
+      await upsertExerciseDetail(selectedExercise, description.trim(), generalVideo);
+      const key = detailKey(selectedExercise, selectedEquipment);
+      await upsertExerciseDetail(key, null, videoUrl.trim());
+    }
     setBusy(false);
     setSaved(true);
     load();
@@ -167,15 +166,15 @@ export function ExerciseLibraryManager() {
         <h2 className="fp-display text-xl font-semibold">Библиотека упражнений</h2>
       </div>
       <p className="text-xs mb-3" style={{ color: "var(--ink-soft)" }}>
-        Описание и видео можно задать отдельно на каждый снаряд — «Приседания со штангой» и
-        «Приседания в Смите» могут иметь разные ролики.
+        Описание техники — одно на упражнение, для всех вариаций сразу. Видео можно задать отдельно
+        на каждый снаряд — «Приседания со штангой» и «Приседания в Смите» могут иметь разные ролики.
       </p>
 
       <div className="fp-card p-3 mb-4 flex items-start gap-2" style={{ background: "var(--bg)" }}>
         <Info size={14} color="var(--ink-soft)" style={{ marginTop: 1, flexShrink: 0 }} />
         <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
           Формат видео: квадрат {VIDEO_UPLOAD_GUIDE.aspectRatio}, {VIDEO_UPLOAD_GUIDE.resolution}, {VIDEO_UPLOAD_GUIDE.format},
-          {" "}до {VIDEO_UPLOAD_GUIDE.maxSizeMB} МБ, ролик короче {VIDEO_UPLOAD_GUIDE.maxDurationSec} сек — грузится быстро на мобильном интернете.
+          {" "}до {VIDEO_UPLOAD_GUIDE.maxSizeMB} МБ, ролик короче {VIDEO_UPLOAD_GUIDE.maxDurationSec} сек.
         </div>
       </div>
 
@@ -190,11 +189,15 @@ export function ExerciseLibraryManager() {
           ) : (
             <div className="fp-card fp-scroll" style={{ maxHeight: 400, overflowY: "auto" }}>
               {names.map((n) => {
-                const hasAny = Object.keys(details).some((k) => k === n || k.startsWith(`${n} — `));
+                const hasDescription = !!details[n]?.description;
+                const hasAnyVideo = Object.keys(details).some((k) => (k === n || k.startsWith(`${n} — `)) && details[k]?.video_url);
                 return (
                   <button key={n} onClick={() => pickExercise(n)} className="w-full text-left px-3 py-2.5 text-sm border-b last:border-0 flex items-center justify-between" style={{ borderColor: "var(--line)" }}>
                     <span>{n}</span>
-                    {hasAny && <Video size={13} color="var(--accent-2)" />}
+                    <span className="flex items-center gap-1.5">
+                      {hasDescription && <BookOpen size={12} color="var(--ink-soft)" />}
+                      {hasAnyVideo && <Video size={13} color="var(--accent-2)" />}
+                    </span>
                   </button>
                 );
               })}
@@ -208,15 +211,18 @@ export function ExerciseLibraryManager() {
             <button onClick={() => setSelectedExercise(null)} className="text-xs" style={{ color: "var(--ink-soft)" }}>← К списку</button>
           </div>
 
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Описание техники (общее для всех вариаций)</label>
+          <textarea className="fp-input mb-4" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Как правильно выполнять упражнение…" />
+
           {equipmentOptions.length > 0 && (
-            <div className="mb-4">
-              <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Вариация (снаряд)</label>
+            <div className="mb-3">
+              <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Видео для вариации (снаряда)</label>
               <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => pickEquipment(GENERAL_KEY)}
                   className="fp-card px-2.5 py-1.5 text-xs"
                   style={{ borderColor: selectedEquipment === GENERAL_KEY ? "var(--accent)" : "var(--line)", borderWidth: selectedEquipment === GENERAL_KEY ? 1.5 : 1 }}
-                >Общее (все варианты)</button>
+                >Общее / запасное</button>
                 {equipmentOptions.map((eq) => (
                   <button
                     key={eq}
@@ -229,15 +235,14 @@ export function ExerciseLibraryManager() {
             </div>
           )}
 
-          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Описание техники</label>
-          <textarea className="fp-input mb-4" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Как правильно выполнять упражнение…" />
-
-          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Видео</label>
+          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>
+            Видео {selectedEquipment !== GENERAL_KEY ? `— ${selectedEquipment}` : ""}
+          </label>
           {videoUrl ? (
             <div className="mb-3" style={{ maxWidth: 280 }}>
               <SquareVideoPlayer src={videoUrl} title={selectedExercise} />
               <button className="text-xs mt-1.5 flex items-center gap-1" style={{ color: "var(--danger)" }} onClick={() => setVideoUrl("")}>
-                <X size={12} /> Убрать видео
+                <X size={12} /> Убрать это видео
               </button>
             </div>
           ) : (
@@ -259,9 +264,7 @@ export function ExerciseLibraryManager() {
 
 /* ------------------------------ КЛИЕНТ: ПРОСМОТР ------------------------------ */
 
-// Разбивает описание на абзацы Подготовка/Движение/Контроль. Основной способ —
-// по пустой строке между ними; если в тексте пустых строк нет (например, слепили
-// в одну строку), режем прямо перед метками, чтобы разбивка не терялась.
+// Разбивает описание на абзацы Подготовка/Движение/Контроль.
 function splitDescriptionParagraphs(text) {
   if (!text) return [];
   let parts = text.split(/\r?\n\s*\r?\n/).map((s) => s.trim()).filter(Boolean);
@@ -270,24 +273,27 @@ function splitDescriptionParagraphs(text) {
   return parts.length > 0 ? parts : [text.trim()];
 }
 
-// Общий хук — тянет описание/видео для конкретного упражнения (с учётом снаряда,
-// см. extractDetailKeys), используется и для блока описания, и для блока видео,
-// чтобы не делать по два одинаковых запроса.
+// Общий хук — description всегда из строки с базовым именем (одно на все
+// вариации), video_url — из наиболее специфичной существующей строки
+// (снаряд конкретной вариации → общая/запасная строка).
 export function useExerciseDetail(fullExerciseName) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    const keys = extractDetailKeys(fullExerciseName);
+    const baseName = extractBaseName(fullExerciseName);
+    const videoKeys = extractVideoKeys(fullExerciseName);
     (async () => {
-      for (const key of keys) {
-        try {
-          const d = await fetchExerciseDetail(key);
-          if (d && (d.description || d.video_url)) { setDetail(d); setLoading(false); return; }
-        } catch (e) { /* try next key */ }
-      }
-      setDetail(null);
+      const [baseRow, ...videoRows] = await Promise.all([
+        fetchExerciseDetail(baseName).catch(() => null),
+        ...videoKeys.filter((k) => k !== baseName).map((k) => fetchExerciseDetail(k).catch(() => null)),
+      ]);
+      const description = baseRow?.description || null;
+      const specificVideo = videoRows.find((r) => r?.video_url)?.video_url;
+      const video_url = specificVideo || baseRow?.video_url || null;
+      if (description || video_url) setDetail({ description, video_url });
+      else setDetail(null);
       setLoading(false);
     })();
   }, [fullExerciseName]);
