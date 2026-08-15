@@ -1,4 +1,4 @@
-import { savePushSubscription } from "./api";
+import { savePushSubscription, deletePushSubscription } from "./api";
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
 
@@ -65,6 +65,22 @@ export async function enablePushNotifications(authUserId) {
   return { ok: true };
 }
 
+export async function disablePushNotifications() {
+  try {
+    if (!pushSupported()) return { ok: true };
+    const registration = await navigator.serviceWorker.getRegistration("/sw.js");
+    if (!registration) return { ok: true };
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      await deletePushSubscription(subscription.endpoint);
+      await subscription.unsubscribe();
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: "unsubscribe_failed", detail: e.message };
+  }
+}
+
 export const PUSH_ERROR_MESSAGES = {
   unsupported: "Браузер не поддерживает push-уведомления (на iPhone это работает только если сайт сохранён на экран «Домой» как приложение).",
   missing_vapid_key: "На сервере не настроен ключ уведомлений (VITE_VAPID_PUBLIC_KEY) — сообщите разработчику.",
@@ -75,4 +91,5 @@ export const PUSH_ERROR_MESSAGES = {
   sw_register_failed: "Не удалось зарегистрировать службу уведомлений (Service Worker).",
   subscribe_failed: "Не удалось подписаться на уведомления — проверьте ключ VAPID.",
   save_failed: "Подписка создана, но не сохранилась на сервере — проверьте подключение.",
+  unsubscribe_failed: "Не получилось отключить уведомления — попробуйте ещё раз.",
 };

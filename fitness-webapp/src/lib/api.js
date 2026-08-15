@@ -444,6 +444,11 @@ export async function savePushSubscription(authUserId, subscription) {
   if (error) throw error;
 }
 
+export async function deletePushSubscription(endpoint) {
+  const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+  if (error) throw error;
+}
+
 export async function fetchNutritionLoggingDays(clientId, sinceDate) {
   const { data, error } = await supabase
     .from("nutrition_entries")
