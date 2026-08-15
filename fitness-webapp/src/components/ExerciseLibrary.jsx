@@ -35,14 +35,16 @@ export function detailKey(baseName, equipment) {
   return equipment ? `${baseName} — ${equipment}` : baseName;
 }
 
-// Полное название в тренировке — "Группа - Упражнение - Снаряд - Вариант".
-// Возвращает [специфичный ключ, ключ-fallback] для поиска с запасным вариантом.
+// Полное название в тренировке — "Группа - Упражнение - Снаряд - Вариант"
+// (либо только "Группа - Упражнение - Вариант", если у упражнения нет снаряда —
+// тогда вариант "сдвигается" на место снаряда). Пробуем все правдоподобные
+// ключи по очереди, с общим названием как последним запасным вариантом.
 export function extractDetailKeys(fullName) {
   const parts = (fullName || "").split(" - ");
   const base = parts.length >= 2 ? parts[1] : fullName;
-  const equipment = parts[2] || null;
   const keys = [];
-  if (equipment) keys.push(detailKey(base, equipment));
+  if (parts[2]) keys.push(detailKey(base, parts[2]));
+  if (parts[3]) keys.push(detailKey(base, parts[3]));
   keys.push(base);
   return keys;
 }
@@ -257,7 +259,21 @@ export function ExerciseLibraryManager() {
 
 /* ------------------------------ КЛИЕНТ: ПРОСМОТР ------------------------------ */
 
-export function ExerciseInfoPanel({ fullExerciseName }) {
+// Разбивает описание на абзацы Подготовка/Движение/Контроль. Основной способ —
+// по пустой строке между ними; если в тексте пустых строк нет (например, слепили
+// в одну строку), режем прямо перед метками, чтобы разбивка не терялась.
+function splitDescriptionParagraphs(text) {
+  if (!text) return [];
+  let parts = text.split(/\r?\n\s*\r?\n/).map((s) => s.trim()).filter(Boolean);
+  if (parts.length > 1) return parts;
+  parts = text.split(/(?=(?:Подготовка|Движение|Контроль):)/).map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : [text.trim()];
+}
+
+// Общий хук — тянет описание/видео для конкретного упражнения (с учётом снаряда,
+// см. extractDetailKeys), используется и для блока описания, и для блока видео,
+// чтобы не делать по два одинаковых запроса.
+export function useExerciseDetail(fullExerciseName) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -276,32 +292,46 @@ export function ExerciseInfoPanel({ fullExerciseName }) {
     })();
   }, [fullExerciseName]);
 
-  if (loading || !detail || (!detail.description && !detail.video_url)) return null;
+  return { detail, loading };
+}
 
+export function ExerciseDescriptionBlock({ detail, loading }) {
+  if (loading || !detail || !detail.description) return null;
   return (
     <div className="fp-card p-3 mb-4" style={{ background: "var(--bg)" }}>
       <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
         <PlayCircle size={13} /> О ТЕХНИКЕ
       </div>
-      {detail.description && (
-        <div className="mb-2 space-y-1.5">
-          {detail.description.split(/\n{2,}/).map((para, i) => {
-            const trimmed = para.trim();
-            if (!trimmed) return null;
-            const m = trimmed.match(/^(Подготовка|Движение|Контроль):\s*([\s\S]*)$/);
-            return (
-              <p key={i} className="text-xs">
-                {m ? <><b>{m[1]}:</b> {m[2]}</> : trimmed}
-              </p>
-            );
-          })}
-        </div>
-      )}
-      {detail.video_url && (
-        <div style={{ maxWidth: 320, margin: "0 auto" }}>
-          <SquareVideoPlayer src={detail.video_url} title={fullExerciseName} />
-        </div>
-      )}
+      <div className="space-y-1.5">
+        {splitDescriptionParagraphs(detail.description).map((para, i) => {
+          const m = para.match(/^(Подготовка|Движение|Контроль):\s*([\s\S]*)$/);
+          return (
+            <p key={i} className="text-xs">
+              {m ? <><b>{m[1]}:</b> {m[2]}</> : para}
+            </p>
+          );
+        })}
+      </div>
     </div>
+  );
+}
+
+export function ExerciseVideoBlock({ detail, loading, title }) {
+  if (loading || !detail || !detail.video_url) return null;
+  return (
+    <div className="mb-4" style={{ maxWidth: 320, margin: "0 auto 16px" }}>
+      <SquareVideoPlayer src={detail.video_url} title={title} />
+    </div>
+  );
+}
+
+// Обёртка "всё вместе" — оставлена для мест, где порядок описание+видео не важен.
+export function ExerciseInfoPanel({ fullExerciseName }) {
+  const { detail, loading } = useExerciseDetail(fullExerciseName);
+  return (
+    <>
+      <ExerciseDescriptionBlock detail={detail} loading={loading} />
+      <ExerciseVideoBlock detail={detail} loading={loading} title={fullExerciseName} />
+    </>
   );
 }
