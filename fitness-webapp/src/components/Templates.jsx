@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Trash2, Copy, Layers, TrendingUp, Zap } from "lucide-react";
+import { Trash2, Copy, Layers, TrendingUp, Zap, Plus, X } from "lucide-react";
 import { AssignWorkoutForm, formatSets } from "./Workouts";
 import {
   fetchTemplates, createTemplate, deleteTemplate, assignTemplateToClient,
-  fetchSessionsForClient, fetchWorkoutsForClient, createWorkout,
+  fetchSessionsForClient, fetchWorkoutsForClient, createWorkout, fetchCheckins,
 } from "../lib/api";
+import { resolveExerciseType } from "../data/exerciseTypes";
+import { GOAL_OPTIONS, GOAL_CORRIDORS, WEEK_TYPE_META, calcWeekTarget } from "../lib/periodizationEngine";
 
 /* ------------------------------ ШАБЛОНЫ ------------------------------ */
 
@@ -101,86 +103,56 @@ export function AssignFromTemplate({ trainer, clientId, onAssigned }) {
 
 /* ------------------------------ ПЕРИОДИЗАЦИЯ ------------------------------ */
 
-export const WEEK_PLAN = [
-  {
-    key: "base", dbTag: "light", label: "Лёгкая неделя", weightMult: 1.0, setsMult: 1, repDelta: 0,
-    note: "Точка отсчёта — средний рабочий вес за последние тренировки.",
-    clientNote: "Лёгкая неделя. Вес и объём — как база, без рекордов. Цель — плавно втянуться и наработать технику перед ростом нагрузки.",
-  },
-  {
-    key: "build", dbTag: "medium", label: "Средняя неделя", weightMult: 1.05, setsMult: 1, repDelta: 1,
-    note: "Вес +5%, чуть больше повторений — растим объём.",
-    clientNote: "Средняя неделя. Вес и число повторений немного выросли — начинаем нагружать сильнее, но без надрыва.",
-  },
-  {
-    key: "peak", dbTag: "heavy", label: "Тяжёлая неделя", weightMult: 1.1, setsMult: 1, repDelta: -2,
-    note: "Вес +10%, повторений меньше — пиковая интенсивность блока.",
-    clientNote: "Тяжёлая неделя — пик блока. Вес заметно выше, повторений меньше. Это самая сложная неделя цикла, отдыхай между подходами как следует.",
-  },
-  {
-    key: "deload", dbTag: "deload", label: "Разгрузка", weightMult: 0.65, setsMult: 0.75, repDelta: -2,
-    note: "Вес и объём вниз — даём ЦНС и суставам восстановиться перед новым циклом.",
-    clientNote: "Неделя разгрузки. Вес и объём специально снижены — это не отдых от тренировок, а часть плана: телу нужно восстановиться, чтобы дальше расти.",
-  },
-];
-
-export function adjustReps(baseReps, delta) {
-  const n = parseInt(baseReps, 10);
-  if (isNaN(n)) return baseReps; // нечисловые значения (напр. время для кардио) не трогаем
-  return String(Math.max(1, n + delta));
-}
-
-function exerciseBaseline(exerciseName, sessions) {
-  const weights = [];
-  let reps = "10";
+function anchorFor(exerciseName, sessions) {
+  // Якорный подход — реально выполненный сет с максимальным весом за
+  // последние тренировки (а не среднее по всем сетам).
+  let best = null;
   sessions.forEach((s) => {
     (s.exercises || []).forEach((e) => {
-      if (e.name === exerciseName && Array.isArray(e.actualSets)) {
-        e.actualSets.forEach((set) => {
-          const w = parseFloat(set.weight);
-          if (!isNaN(w) && w > 0) weights.push(w);
-          if (set.reps) reps = set.reps;
-        });
-      }
+      if (e.name !== exerciseName || !Array.isArray(e.actualSets)) return;
+      e.actualSets.forEach((set) => {
+        const w = parseFloat(set.weight);
+        const r = parseFloat(set.reps);
+        if (isNaN(w) || isNaN(r) || w <= 0) return;
+        if (!best || w > best.weight) best = { weight: w, reps: r };
+      });
     });
   });
-  if (weights.length === 0) return null;
-  return { avgWeight: weights.reduce((a, b) => a + b, 0) / weights.length, reps, samples: weights.length };
+  return best;
 }
 
-export function effectiveWeightMult(ex, week) {
-  // Ассистируемые (гравитрон/резина): больше вес/сопротивление = легче.
-  // Значит "прогресс" — это СНИЖЕНИЕ веса на неделях роста и ПОВЫШЕНИЕ на разгрузке.
-  return ex.is_assisted ? 1 / week.weightMult : week.weightMult;
+function extractExerciseMeta(fullName) {
+  const parts = (fullName || "").split(" - ");
+  const base = parts.length >= 2 ? parts[1] : fullName;
+  const equipment = parts[2] || null;
+  return { base, equipment };
 }
 
-function buildWeekExercises(baseWorkout, baselines, week) {
-  return baseWorkout.workout_exercises.map((ex) => {
-    const baseline = baselines[ex.name];
-    const passthrough = { name: ex.name, isAssisted: ex.is_assisted, periodizationEnabled: ex.periodization_enabled };
-    if (!baseline || ex.periodization_enabled === false) return { ...passthrough, sets: ex.sets };
-    const targetCount = Math.max(1, Math.round(ex.sets.length * week.setsMult));
-    const weight = Math.max(0, Math.round(baseline.avgWeight * effectiveWeightMult(ex, week)));
-    const reps = adjustReps(baseline.reps, week.repDelta);
-    const sets = Array.from({ length: targetCount }, () => ({ reps, weight: String(weight) }));
-    return { ...passthrough, sets };
-  });
-}
+const WEEK_TYPE_OPTIONS = ["light", "medium", "heavy", "deload"];
 
 export function PeriodizationPanel({ client }) {
   const [sessions, setSessions] = useState([]);
   const [workouts, setWorkouts] = useState([]);
   const [selectedWorkoutId, setSelectedWorkoutId] = useState("");
+  const [goal, setGoal] = useState("Гипертрофия");
+  const [weeks, setWeeks] = useState([{ id: 1, type: "light" }, { id: 2, type: "medium" }, { id: 3, type: "heavy" }, { id: 4, type: "deload" }]);
+  const [bodyWeight, setBodyWeight] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(null);
   const [created, setCreated] = useState({});
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchSessionsForClient(client.id), fetchWorkoutsForClient(client.id)]).then(([s, w]) => {
+    Promise.all([
+      fetchSessionsForClient(client.id),
+      fetchWorkoutsForClient(client.id),
+      fetchCheckins(client.id),
+    ]).then(([s, w, checkins]) => {
       setSessions(s);
       setWorkouts(w);
       if (w.length > 0) setSelectedWorkoutId(w[0].id);
+      if (checkins.length > 0) setBodyWeight(String(checkins[0].weight));
+      else if (client.onboarding?.startWeight) setBodyWeight(String(client.onboarding.startWeight));
       setLoading(false);
     });
   }, [client.id]);
@@ -191,17 +163,36 @@ export function PeriodizationPanel({ client }) {
   const baseWorkout = workouts.find((w) => w.id === selectedWorkoutId) || workouts[0];
   const relevantSessions = sessions.filter((s) => s.workout_id === baseWorkout.id).slice(0, 4);
 
-  const baselines = {};
-  baseWorkout.workout_exercises.forEach((ex) => { baselines[ex.name] = exerciseBaseline(ex.name, relevantSessions); });
-  const hasEnoughData = baseWorkout.workout_exercises.some(
-    (ex) => ex.periodization_enabled !== false && baselines[ex.name] && baselines[ex.name].samples >= 2
-  );
+  const exerciseInfo = {}; // name -> { type, anchor }
+  baseWorkout.workout_exercises.forEach((ex) => {
+    const { base, equipment } = extractExerciseMeta(ex.name);
+    const type = ex.periodization_enabled === false ? null : resolveExerciseType(base, equipment);
+    const anchor = type ? anchorFor(ex.name, relevantSessions) : null;
+    exerciseInfo[ex.name] = { type, anchor };
+  });
+  const hasEnoughData = Object.values(exerciseInfo).some((i) => i.type && i.anchor);
+
+  const addWeek = () => setWeeks((prev) => [...prev, { id: Date.now(), type: "medium" }]);
+  const removeWeek = (id) => setWeeks((prev) => prev.filter((w) => w.id !== id));
+  const changeWeekType = (id, type) => setWeeks((prev) => prev.map((w) => (w.id === id ? { ...w, type } : w)));
+
+  const buildExercisesForWeek = (weekType) =>
+    baseWorkout.workout_exercises.map((ex) => {
+      const info = exerciseInfo[ex.name];
+      const passthrough = { name: ex.name, isAssisted: info?.type === "assisted", periodizationEnabled: ex.periodization_enabled };
+      if (!info?.type || !info?.anchor) return { ...passthrough, sets: ex.sets };
+      const result = calcWeekTarget({ type: info.type, anchor: info.anchor, goal, weekType, bodyWeight: Number(bodyWeight) || undefined });
+      const targetCount = ex.sets.length;
+      const reps = result.reps || info.anchor.reps;
+      const sets = Array.from({ length: targetCount }, () => ({ reps: String(reps).split("-")[0], weight: String(result.weight) }));
+      return { ...passthrough, sets };
+    });
 
   const handleCreateWeek = async (week) => {
-    setCreating(week.key);
-    const exercises = buildWeekExercises(baseWorkout, baselines, week);
-    await createWorkout(client.id, baseWorkout.title, exercises, week.dbTag);
-    setCreated((prev) => ({ ...prev, [week.key]: true }));
+    setCreating(week.id);
+    const exercises = buildExercisesForWeek(week.type);
+    await createWorkout(client.id, baseWorkout.title, exercises, week.type);
+    setCreated((prev) => ({ ...prev, [week.id]: true }));
     setCreating(null);
   };
 
@@ -213,7 +204,7 @@ export function PeriodizationPanel({ client }) {
       </div>
 
       {workouts.length > 1 && (
-        <div className="mb-4">
+        <div className="mb-3">
           <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>На основе тренировки</label>
           <select className="fp-input" value={selectedWorkoutId} onChange={(e) => setSelectedWorkoutId(e.target.value)}>
             {workouts.map((w) => <option key={w.id} value={w.id}>{w.title}</option>)}
@@ -221,59 +212,104 @@ export function PeriodizationPanel({ client }) {
         </div>
       )}
 
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Цель блока</label>
+          <select className="fp-input" value={goal} onChange={(e) => setGoal(e.target.value)}>
+            {GOAL_OPTIONS.map((g) => <option key={g} value={g}>{g} ({GOAL_CORRIDORS[g][0]}-{GOAL_CORRIDORS[g][1]}%)</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Вес клиента, кг</label>
+          <input className="fp-input" type="number" value={bodyWeight} onChange={(e) => setBodyWeight(e.target.value)} placeholder="для ассист. упражнений" />
+        </div>
+      </div>
+
       {relevantSessions.length < 1 ? (
         <div className="fp-card p-4 mb-4" style={{ background: "var(--bg)" }}>
           <div className="flex items-start gap-2">
             <Zap size={15} color="var(--accent)" style={{ marginTop: 2, flexShrink: 0 }} />
             <p className="text-sm">
-              Клиент ещё не завершил ни одной тренировки по «{baseWorkout.title}». Как только пройдёт первая — здесь появится
-              расчёт весов на следующий 4-недельный блок на основе того, что он реально поднимал.
+              Клиент ещё не завершил ни одной тренировки по «{baseWorkout.title}». Как только пройдёт первая (якорная) —
+              здесь появится расчёт весов на основе того, что он реально поднимал.
             </p>
           </div>
         </div>
       ) : (
         <>
-          <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
-            Расчёт на основе {relevantSessions.length} последних тренировок по «{baseWorkout.title}» — реальные веса, которые поднимал клиент.
-            Классическая волна: рост объёма → пик → разгрузка, чтобы прогресс продолжался без перегрузки ЦНС.
+          <p className="text-xs mb-3" style={{ color: "var(--ink-soft)" }}>
+            Якорный подход берётся из {relevantSessions.length} последних тренировок по «{baseWorkout.title}» — максимальный
+            реально поднятый вес. Расчёт по формуле Бжицки (для базовых/ассистируемых) или пошаговой прогрессии
+            (для изолирующих/унилатеральных), с учётом цели блока.
           </p>
-          <div className="space-y-3">
-            {WEEK_PLAN.map((week) => (
-              <div key={week.key} className="fp-card p-4">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="font-semibold text-sm">{week.label}</div>
-                  {created[week.key] ? (
-                    <span className="fp-chip" style={{ background: "var(--accent-2)", color: "#fff" }}>Создано ✓</span>
-                  ) : (
-                    <button
-                      className="fp-btn fp-btn-outline px-3 py-1.5 text-xs disabled:opacity-40"
-                      disabled={creating === week.key || !hasEnoughData}
-                      onClick={() => handleCreateWeek(week)}
-                    >
-                      {creating === week.key ? "Создаём…" : "Создать эту неделю"}
-                    </button>
-                  )}
+
+          <div className="fp-card p-3 mb-4" style={{ background: "var(--bg)" }}>
+            <div className="text-xs mb-2 font-semibold" style={{ color: "var(--ink-soft)" }}>УПРАЖНЕНИЯ В ТРЕНИРОВКЕ</div>
+            <ul className="text-xs space-y-1">
+              {baseWorkout.workout_exercises.map((ex) => {
+                const info = exerciseInfo[ex.name];
+                if (!info?.type) return <li key={ex.id} style={{ color: "var(--ink-soft)" }}>{ex.name} — не участвует</li>;
+                if (!info.anchor) return <li key={ex.id} style={{ color: "var(--ink-soft)" }}>{ex.name} ({info.type}) — нет данных</li>;
+                return <li key={ex.id}>{ex.name} — <b>{info.type}</b>, якорь {info.anchor.weight} кг × {info.anchor.reps}</li>;
+              })}
+            </ul>
+          </div>
+
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs" style={{ color: "var(--ink-soft)" }}>Недели блока (после якорной)</label>
+              <button onClick={addWeek} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}><Plus size={12} /> Добавить неделю</button>
+            </div>
+            <div className="space-y-2">
+              {weeks.map((week, idx) => (
+                <div key={week.id} className="fp-card p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>Неделя {idx + 1}</span>
+                    <div className="flex items-center gap-2">
+                      {created[week.id] ? (
+                        <span className="fp-chip" style={{ background: "var(--accent-2)", color: "#fff" }}>Создано ✓</span>
+                      ) : (
+                        <>
+                          <button
+                            className="fp-btn fp-btn-outline px-3 py-1.5 text-xs disabled:opacity-40"
+                            disabled={creating === week.id || !hasEnoughData}
+                            onClick={() => handleCreateWeek(week)}
+                          >{creating === week.id ? "Создаём…" : "Создать"}</button>
+                          {weeks.length > 1 && <button onClick={() => removeWeek(week.id)}><X size={14} color="var(--danger)" /></button>}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {WEEK_TYPE_OPTIONS.map((t) => (
+                      <button
+                        key={t} onClick={() => changeWeekType(week.id, t)}
+                        className="fp-card px-2.5 py-1 text-xs"
+                        style={{
+                          borderColor: week.type === t ? WEEK_TYPE_META[t].color : "var(--line)",
+                          borderWidth: week.type === t ? 1.5 : 1,
+                          background: week.type === t ? WEEK_TYPE_META[t].color : "#fff",
+                          color: week.type === t ? "#fff" : "var(--ink)",
+                        }}
+                      >{WEEK_TYPE_META[t].label}</button>
+                    ))}
+                  </div>
+                  <ul className="text-xs space-y-0.5">
+                    {baseWorkout.workout_exercises.map((ex) => {
+                      const info = exerciseInfo[ex.name];
+                      if (!info?.type || !info?.anchor) return null;
+                      const result = calcWeekTarget({ type: info.type, anchor: info.anchor, goal, weekType: week.type, bodyWeight: Number(bodyWeight) || undefined });
+                      return (
+                        <li key={ex.id} style={{ color: "var(--ink-soft)" }}>
+                          {ex.name} — {result.weight} кг{result.reps ? ` × ${result.reps}` : ""}
+                          {info.type === "assisted" ? " (ассист)" : ""}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </div>
-                <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>{week.note}</p>
-                <ul className="text-xs space-y-1">
-                  {baseWorkout.workout_exercises.map((ex) => {
-                    if (ex.periodization_enabled === false) {
-                      return <li key={ex.id} style={{ color: "var(--ink-soft)" }}>{ex.name} — не участвует в периодизации (вес не меняется)</li>;
-                    }
-                    const b = baselines[ex.name];
-                    if (!b) return <li key={ex.id} style={{ color: "var(--ink-soft)" }}>{ex.name} — недостаточно данных</li>;
-                    const weight = Math.max(0, Math.round(b.avgWeight * effectiveWeightMult(ex, week)));
-                    const reps = adjustReps(b.reps, week.repDelta);
-                    const count = Math.max(1, Math.round(ex.sets.length * week.setsMult));
-                    return (
-                      <li key={ex.id}>
-                        {ex.name}{ex.is_assisted ? " (ассист.)" : ""} — {count} × {reps} × {weight} кг
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </>
       )}

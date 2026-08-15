@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { Trash2, CalendarDays, Zap, Plus, X } from "lucide-react";
 import { AssignWorkoutForm, formatSets } from "./Workouts";
-import { WEEK_PLAN, effectiveWeightMult, adjustReps } from "./Templates";
-import { fetchMicrocycles, createMicrocycle, deleteMicrocycle, createWorkout } from "../lib/api";
+import { fetchMicrocycles, createMicrocycle, deleteMicrocycle, createWorkout, fetchCheckins } from "../lib/api";
+import { resolveExerciseType } from "../data/exerciseTypes";
+import { GOAL_OPTIONS, GOAL_CORRIDORS, WEEK_TYPE_META, calcWeekTarget } from "../lib/periodizationEngine";
+
+const WEEK_TYPE_ORDER = ["light", "medium", "heavy", "deload"];
+
+function extractExerciseMeta(fullName) {
+  const parts = (fullName || "").split(" - ");
+  const base = parts.length >= 2 ? parts[1] : fullName;
+  const equipment = parts[2] || null;
+  return { base, equipment };
+}
 
 function MicrocycleBuilder({ onSave, onCancel }) {
   const [title, setTitle] = useState("");
@@ -134,24 +144,32 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
   const [withPeriodization, setWithPeriodization] = useState(false);
+  const [goal, setGoal] = useState("Гипертрофия");
+  const [bodyWeight, setBodyWeight] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { fetchMicrocycles(trainer.id).then((m) => { setMicrocycles(m); setLoading(false); }); }, [trainer.id]);
+  useEffect(() => {
+    fetchMicrocycles(trainer.id).then((m) => { setMicrocycles(m); setLoading(false); });
+    fetchCheckins(clientId).then((c) => { if (c.length > 0) setBodyWeight(String(c[0].weight)); }).catch(() => {});
+  }, [trainer.id, clientId]);
 
   const selected = microcycles.find((m) => m.id === selectedId);
 
-  const buildPeriodizedExercises = (exercises, week) =>
+  // Для свежего назначения (без истории тренировок) якорь берём из веса/повторений,
+  // которые тренер сам вписал в шаблон — это "неделя 0", от неё считаем дальше.
+  const buildPeriodizedExercises = (exercises, weekType) =>
     exercises.map((ex) => {
-      const passthrough = { name: ex.name, isAssisted: ex.is_assisted, periodizationEnabled: ex.periodization_enabled };
+      const passthrough = { name: ex.name, isAssisted: false, periodizationEnabled: ex.periodization_enabled };
       if (ex.periodization_enabled === false) return { ...passthrough, sets: ex.sets };
-      const baseWeight = parseFloat(ex.sets[0]?.weight);
-      if (!baseWeight || isNaN(baseWeight)) return { ...passthrough, sets: ex.sets };
-      const mult = effectiveWeightMult(ex, week);
-      const weight = Math.max(0, Math.round(baseWeight * mult));
-      const count = Math.max(1, Math.round(ex.sets.length * week.setsMult));
-      const reps = adjustReps(ex.sets[0]?.reps || "10", week.repDelta);
-      const sets = Array.from({ length: count }, () => ({ reps, weight: String(weight) }));
-      return { ...passthrough, sets };
+      const { base, equipment } = extractExerciseMeta(ex.name);
+      const type = resolveExerciseType(base, equipment);
+      const anchorWeight = parseFloat(ex.sets[0]?.weight);
+      const anchorReps = parseFloat(ex.sets[0]?.reps);
+      if (!type || isNaN(anchorWeight) || isNaN(anchorReps) || anchorWeight <= 0) return { ...passthrough, sets: ex.sets };
+      const result = calcWeekTarget({ type, anchor: { weight: anchorWeight, reps: anchorReps }, goal, weekType, bodyWeight: Number(bodyWeight) || undefined });
+      const reps = result.reps ? String(result.reps).split("-")[0] : String(anchorReps);
+      const sets = ex.sets.map(() => ({ reps, weight: String(result.weight) }));
+      return { ...passthrough, isAssisted: type === "assisted", sets };
     });
 
   const assign = async () => {
@@ -168,10 +186,10 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
       // Важно: сначала перебираем недели, потом дни — так клиент получает
       // сначала все тренировки лёгкой недели по порядку микроцикла, потом
       // все тренировки средней и т.д., а не все 4 недели одного дня подряд.
-      for (const week of WEEK_PLAN) {
+      for (const weekType of WEEK_TYPE_ORDER) {
         for (const day of selected.workouts) {
-          const exercises = buildPeriodizedExercises(day.exercises, week);
-          await createWorkout(clientId, `${selected.title} — ${day.title}`, exercises, week.dbTag);
+          const exercises = buildPeriodizedExercises(day.exercises, weekType);
+          await createWorkout(clientId, `${selected.title} — ${day.title}`, exercises, weekType);
         }
       }
     }
@@ -199,13 +217,30 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
 
       {selected && (
         <>
-          <label className="flex items-start gap-2 text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
+          <label className="flex items-start gap-2 text-xs mb-3" style={{ color: "var(--ink-soft)" }}>
             <input type="checkbox" checked={withPeriodization} onChange={(e) => setWithPeriodization(e.target.checked)} style={{ marginTop: 2 }} />
             <span>
-              <b style={{ color: "var(--ink)" }}>Сразу развернуть в 4-недельный блок с периодизацией</b> — вес из шаблона берётся
-              как «неделя 1», дальше рост объёма → пик → разгрузка, как в разделе «Периодизация». Создаст {selected.workouts.length * 4} тренировок сразу.
+              <b style={{ color: "var(--ink)" }}>Сразу развернуть в блок с периодизацией (лёгкая → средняя → тяжёлая → разгрузка)</b> —
+              вес и повторения из шаблона берутся как якорь, дальше считаются по формуле Бжицки/шаговой прогрессии.
+              Создаст {selected.workouts.length * 4} тренировок сразу.
             </span>
           </label>
+
+          {withPeriodization && (
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Цель блока</label>
+                <select className="fp-input" value={goal} onChange={(e) => setGoal(e.target.value)}>
+                  {GOAL_OPTIONS.map((g) => <option key={g} value={g}>{g} ({GOAL_CORRIDORS[g][0]}-{GOAL_CORRIDORS[g][1]}%)</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Вес клиента, кг</label>
+                <input className="fp-input" type="number" value={bodyWeight} onChange={(e) => setBodyWeight(e.target.value)} placeholder="для ассист." />
+              </div>
+            </div>
+          )}
+
           <button className="fp-btn fp-btn-accent w-full py-2.5 disabled:opacity-40 flex items-center justify-center gap-2" disabled={busy} onClick={assign}>
             <Zap size={14} /> {busy ? "Назначаем…" : "Назначить клиенту"}
           </button>
