@@ -572,3 +572,26 @@ export async function deleteMicrocycle(id) {
   const { error } = await supabase.from("microcycle_templates").delete().eq("id", id);
   if (error) throw error;
 }
+
+/* ------------------------------ ОПИСАНИЯ УПРАЖНЕНИЙ ------------------------------ */
+
+export async function fetchAllExerciseDetails() {
+  const { data, error } = await supabase.from("exercise_details").select("*");
+  if (error) throw error;
+  const map = {};
+  (data || []).forEach((d) => { map[d.name] = d; });
+  return map;
+}
+
+export async function fetchExerciseDetail(name) {
+  const { data, error } = await supabase.from("exercise_details").select("*").eq("name", name).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function upsertExerciseDetail(name, description, videoUrl) {
+  const { error } = await supabase
+    .from("exercise_details")
+    .upsert({ name, description, video_url: videoUrl, updated_at: new Date().toISOString() }, { onConflict: "name" });
+  if (error) throw error;
+}
