@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Plus, X, Trash2, ArrowUp, ArrowDown, Timer, Play, Pause, Flag, CheckCircle2 } from "lucide-react";
 import { EXERCISE_GROUPS } from "../data/exerciseGroups";
+import { ExerciseInfoPanel } from "./ExerciseLibrary";
 
 /* --------------------------------- HELPERS -------------------------------- */
 
@@ -376,6 +377,8 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
 
       <div className="fp-card p-5 mb-4 flex-1">
         <div className="fp-display text-xl font-semibold mb-4">{exercise.name}</div>
+
+        <ExerciseInfoPanel fullExerciseName={exercise.name} />
 
         {isCardio ? (
           <div>
