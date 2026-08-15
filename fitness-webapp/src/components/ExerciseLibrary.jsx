@@ -283,7 +283,20 @@ export function ExerciseInfoPanel({ fullExerciseName }) {
       <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
         <PlayCircle size={13} /> О ТЕХНИКЕ
       </div>
-      {detail.description && <p className="text-xs mb-2">{detail.description}</p>}
+      {detail.description && (
+        <div className="mb-2 space-y-1.5">
+          {detail.description.split(/\n{2,}/).map((para, i) => {
+            const trimmed = para.trim();
+            if (!trimmed) return null;
+            const m = trimmed.match(/^(Подготовка|Движение|Контроль):\s*([\s\S]*)$/);
+            return (
+              <p key={i} className="text-xs">
+                {m ? <><b>{m[1]}:</b> {m[2]}</> : trimmed}
+              </p>
+            );
+          })}
+        </div>
+      )}
       {detail.video_url && (
         <div style={{ maxWidth: 320, margin: "0 auto" }}>
           <SquareVideoPlayer src={detail.video_url} title={fullExerciseName} />
