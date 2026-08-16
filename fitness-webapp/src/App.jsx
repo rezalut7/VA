@@ -50,7 +50,7 @@ function planPriceLabel(planId, billing) {
   return plan.priceLabel;
 }
 
-const GOAL_OPTIONS = ["Похудение", "Набор массы", "Поддержание формы", "Восстановление после травмы", "Другое"];
+const GOAL_OPTIONS = ["Сила", "Выносливость", "Гипертрофия", "Похудение", "Рекомпозиция", "Общий тонус", "Спортивная подготовка", "Реабилитация"];
 const EXPERIENCE_OPTIONS = ["Новичок", "Средний", "Продвинутый"];
 const DIET_OPTIONS = ["Без ограничений", "Вегетарианство", "Веганство", "Без глютена", "Без лактозы", "Халяль", "Кошер"];
 const OCCUPATION_OPTIONS = ["Сидячая работа", "Активная работа", "Смешанная / на ногах"];
@@ -466,12 +466,11 @@ function OnboardingForm({ client, onDone }) {
           <div>
             <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Травмы или ограничения</label>
             <textarea className="fp-input mb-3" rows={2} value={injuries} onChange={(e) => setInjuries(e.target.value)} placeholder="Оставьте пустым, если нет" />
-            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Хронические заболевания</label>
-            <textarea className="fp-input mb-3" rows={2} value={chronicDiseases} onChange={(e) => setChronicDiseases(e.target.value)} placeholder="Оставьте пустым, если нет" />
             <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Аллергии (в т.ч. пищевые)</label>
-            <textarea className="fp-input mb-3" rows={2} value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder="Оставьте пустым, если нет" />
-            <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Принимаемые лекарства/добавки</label>
-            <textarea className="fp-input" rows={2} value={medications} onChange={(e) => setMedications(e.target.value)} placeholder="Оставьте пустым, если нет" />
+            <textarea className="fp-input" rows={2} value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder="Оставьте пустым, если нет" />
+            <p className="text-xs mt-3" style={{ color: "var(--ink-soft)" }}>
+              Про хронические заболевания и лекарства спросим при первом еженедельном чек-ине — не будем всё сразу.
+            </p>
           </div>
         )}
 
@@ -839,7 +838,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
                 <span className="text-sm font-semibold">Выберите микроцикл</span>
                 <button onClick={() => setAssignMode(null)} className="text-xs" style={{ color: "var(--ink-soft)" }}>Отмена</button>
               </div>
-              <AssignMicrocycle trainer={trainer} clientId={client.id} onAssigned={() => { setAssignMode(null); load(); }} />
+              <AssignMicrocycle trainer={trainer} client={client} onAssigned={() => { setAssignMode(null); load(); }} />
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2 mb-5">
