@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Camera, ClipboardCheck, Sparkles, Lightbulb, TrendingUp, TrendingDown, Minus, ImageOff } from "lucide-react";
 import {
   fetchCheckins, addCheckin, uploadCheckinPhoto,
-  fetchProgress, fetchWorkoutsForClient, fetchNutritionLoggingDays,
+  fetchProgress, fetchWorkoutsForClient, fetchNutritionLoggingDays, completeOnboarding,
 } from "../lib/api";
 import { ExerciseProgressSection } from "./ExerciseProgress";
 import { AchievementsSection } from "./Achievements";
@@ -41,12 +41,14 @@ function RatingPicker({ title, value, onChange, labelLow, labelHigh }) {
   );
 }
 
-function CheckinForm({ clientId, onAdded }) {
+function CheckinForm({ client, clientId, onAdded, isFirst }) {
   const [weight, setWeight] = useState("");
   const [waist, setWaist] = useState(""); const [hips, setHips] = useState("");
   const [chest, setChest] = useState(""); const [arm, setArm] = useState("");
   const [energy, setEnergy] = useState(3); const [adherence, setAdherence] = useState(3);
   const [note, setNote] = useState("");
+  const [chronicDiseases, setChronicDiseases] = useState("");
+  const [medications, setMedications] = useState("");
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -71,8 +73,16 @@ function CheckinForm({ clientId, onAdded }) {
       chest: chest ? Number(chest) : null, arm: arm ? Number(arm) : null,
       energy, adherence, note: note.trim(), photoUrl,
     });
+    if (isFirst && (chronicDiseases.trim() || medications.trim())) {
+      await completeOnboarding(clientId, {
+        ...(client?.onboarding || {}),
+        chronicDiseases: chronicDiseases.trim(),
+        medications: medications.trim(),
+      });
+    }
     setWeight(""); setWaist(""); setHips(""); setChest(""); setArm("");
-    setEnergy(3); setAdherence(3); setNote(""); setPhotoFile(null); setPhotoPreview(null);
+    setEnergy(3); setAdherence(3); setNote(""); setChronicDiseases(""); setMedications("");
+    setPhotoFile(null); setPhotoPreview(null);
     setBusy(false);
     onAdded?.();
   };
@@ -104,6 +114,18 @@ function CheckinForm({ clientId, onAdded }) {
 
       <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Заметка (необязательно)</label>
       <input className="fp-input mb-3" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Как прошла неделя?" />
+
+      {isFirst && (
+        <div className="fp-card p-3 mb-3" style={{ background: "var(--bg)" }}>
+          <div className="text-xs font-semibold mb-2" style={{ color: "var(--ink-soft)" }}>
+            ПЕРВЫЙ ЧЕК-ИН — РАССКАЖИТЕ ПРО ЗДОРОВЬЕ
+          </div>
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Хронические заболевания</label>
+          <textarea className="fp-input mb-2" rows={2} value={chronicDiseases} onChange={(e) => setChronicDiseases(e.target.value)} placeholder="Оставьте пустым, если нет" />
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Принимаемые лекарства/добавки</label>
+          <textarea className="fp-input" rows={2} value={medications} onChange={(e) => setMedications(e.target.value)} placeholder="Оставьте пустым, если нет" />
+        </div>
+      )}
 
       <label className="text-xs mb-1.5 flex items-center gap-1.5" style={{ color: "var(--ink-soft)" }}>
         <Camera size={12} /> Фото прогресса (необязательно)
@@ -184,7 +206,16 @@ function WeightChart({ points }) {
 
 /* ------------------------------ ДИАГНОСТИКА ------------------------------ */
 
-const GOAL_DIRECTION = { "Похудение": "down", "Набор массы": "up", "Поддержание формы": "stable", "Восстановление после травмы": "stable" };
+const GOAL_DIRECTION = {
+  "Похудение": "down",
+  "Гипертрофия": "up",
+  "Сила": "stable",
+  "Выносливость": "stable",
+  "Рекомпозиция": "stable",
+  "Общий тонус": "stable",
+  "Спортивная подготовка": "stable",
+  "Реабилитация": "stable",
+};
 
 function computeTrend(points) {
   if (points.length < 2) return { direction: "not-enough-data", perWeek: 0 };
@@ -327,7 +358,7 @@ export function ProgressTab({ client }) {
         <ExerciseProgressSection client={client} />
       </div>
 
-      <CheckinForm clientId={client.id} onAdded={load} />
+      <CheckinForm client={client} clientId={client.id} onAdded={load} isFirst={insight.checkins.length === 0} />
       <CheckinHistory checkins={insight.checkins} />
     </div>
   );
