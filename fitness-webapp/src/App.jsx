@@ -343,7 +343,7 @@ function ChipMultiSelect({ options, values, onToggle, columns = 2 }) {
         return (
           <button
             key={o} onClick={() => onToggle(o)} className="fp-card px-3 py-2 text-sm text-left"
-            style={{ borderColor: active ? "var(--accent)" : "var(--line)", borderWidth: active ? 1.5 : 1, background: active ? "var(--bg)" : "#fff" }}
+            style={{ borderColor: active ? "var(--accent)" : "var(--line)", borderWidth: active ? 1.5 : 1, background: active ? "var(--bg)" : "var(--surface)" }}
           >{o}</button>
         );
       })}

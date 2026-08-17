@@ -226,7 +226,8 @@ input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {
   background: var(--bg);
   padding-top: max(env(safe-area-inset-top, 0px), 14px);
   padding-bottom: 10px;
-  border-bottom: 1px solid transparent;
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .fp-content-with-header {
