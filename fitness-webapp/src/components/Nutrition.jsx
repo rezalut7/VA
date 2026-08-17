@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Coffee, Sun, Moon, Apple, X, Plus, Search, CheckCircle2, Circle, ClipboardList } from "lucide-react";
+import { Utensils, X, Plus, Search, CheckCircle2, Circle, ClipboardList, ChevronLeft, ChevronRight, Calendar, Zap, Minus } from "lucide-react";
 import { searchFoods, getFoodDetails } from "../lib/food";
 import {
   fetchNutritionForDate, addNutritionEntry, removeNutritionEntry,
-  fetchMealPlan, addMealPlanItem, removeMealPlanItem,
+  fetchMealPlan, addMealPlanItem, removeMealPlanItem, updateClientProfile,
 } from "../lib/api";
 import { NutritionCalculator } from "./NutritionCalculator";
 
-const MEALS = [
-  { id: "breakfast", label: "Завтрак", icon: Coffee },
-  { id: "lunch", label: "Обед", icon: Sun },
-  { id: "dinner", label: "Ужин", icon: Moon },
-  { id: "snack", label: "Перекус", icon: Apple },
-];
+function generateMeals(count) {
+  return Array.from({ length: Math.max(1, count) }, (_, i) => ({ id: `meal_${i + 1}`, label: `Приём ${i + 1}` }));
+}
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -50,11 +47,42 @@ function Ring({ value, max, size = 140, strokeWidth = 12, color = "var(--accent)
   );
 }
 
+/* ------------------------------ КАЛЕНДАРЬ ДНЯ ------------------------------ */
+
+function DateNav({ date, onChange }) {
+  const d = new Date(date + "T00:00:00");
+  const isToday = date === todayStr();
+  const label = d.toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "short" });
+  const shift = (delta) => {
+    const nd = new Date(d);
+    nd.setDate(nd.getDate() + delta);
+    onChange(nd.toISOString().slice(0, 10));
+  };
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <button onClick={() => shift(-1)} className="fp-btn fp-btn-outline p-2"><ChevronLeft size={16} /></button>
+      <label className="flex items-center gap-1.5 text-sm font-semibold capitalize" style={{ cursor: "pointer", position: "relative" }}>
+        <Calendar size={14} color="var(--ink-soft)" />
+        {isToday ? "Сегодня" : label}
+        <input
+          type="date" value={date} max={todayStr()}
+          onChange={(e) => e.target.value && onChange(e.target.value)}
+          style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
+        />
+      </label>
+      <button onClick={() => shift(1)} disabled={isToday} className="fp-btn fp-btn-outline p-2 disabled:opacity-30"><ChevronRight size={16} /></button>
+    </div>
+  );
+}
+
+/* ------------------------------ ДОБАВЛЕНИЕ ЕДЫ ------------------------------ */
+
 function findBase100(servings) {
   return servings.find((s) => /100\s?г|100\s?g/i.test(s.label));
 }
 
 function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }) {
+  const [mode, setMode] = useState("search"); // 'search' | 'quick'
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -64,6 +92,8 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
   const [qty, setQty] = useState(1);
   const [gramsMode, setGramsMode] = useState(false);
   const [grams, setGrams] = useState(100);
+  const [quickName, setQuickName] = useState("");
+  const [quickKcal, setQuickKcal] = useState("");
 
   useEffect(() => {
     if (selectedFood || !query.trim()) { setResults([]); return; }
@@ -93,6 +123,7 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
   };
 
   const clearSelection = () => { setSelectedFood(null); setQuery(""); setResults([]); };
+
   const serving = selectedFood?.servings.find((s) => s.id === servingId);
   const base100 = selectedFood ? findBase100(selectedFood.servings) : null;
 
@@ -118,13 +149,46 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
     clearSelection();
   };
 
+  const submitQuick = () => {
+    if (!quickName.trim() || !quickKcal) return;
+    onAdd({
+      foodId: null, name: quickName.trim(), servingLabel: "быстрый ввод", meal,
+      qty: 1, kcal: Number(quickKcal) || 0, protein: 0, carbs: 0, fat: 0,
+    });
+    setQuickName(""); setQuickKcal("");
+  };
+
   return (
     <div className="fp-card p-4 mb-3" style={{ background: "var(--bg)" }}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>ДОБАВИТЬ ПРОДУКТ</span>
         <button onClick={onCancel}><X size={15} color="var(--ink-soft)" /></button>
       </div>
-      {!selectedFood ? (
+
+      <div className="flex gap-2 mb-3">
+        <button
+          className="fp-card px-2.5 py-1.5 text-xs flex-1"
+          style={{ borderColor: mode === "search" ? "var(--accent)" : "var(--line)", borderWidth: mode === "search" ? 1.5 : 1 }}
+          onClick={() => setMode("search")}
+        >Поиск в базе</button>
+        <button
+          className="fp-card px-2.5 py-1.5 text-xs flex-1 flex items-center justify-center gap-1"
+          style={{ borderColor: mode === "quick" ? "var(--accent)" : "var(--line)", borderWidth: mode === "quick" ? 1.5 : 1 }}
+          onClick={() => setMode("quick")}
+        ><Zap size={12} /> Быстрый ввод ккал</button>
+      </div>
+
+      {mode === "quick" ? (
+        <div>
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Что съели</label>
+          <input className="fp-input mb-2" value={quickName} onChange={(e) => setQuickName(e.target.value)} placeholder="Например: обед в кафе" />
+          <div className="flex items-center gap-2">
+            <input className="fp-input" style={{ width: 100 }} type="number" value={quickKcal} onChange={(e) => setQuickKcal(e.target.value)} placeholder="ккал" />
+            <span className="text-xs" style={{ color: "var(--ink-soft)" }}>ккал (без БЖУ)</span>
+            <button className="fp-btn fp-btn-accent px-4 py-2 text-xs ml-auto disabled:opacity-40" disabled={!quickName.trim() || !quickKcal} onClick={submitQuick}>{submitLabel}</button>
+          </div>
+        </div>
+      ) : !selectedFood ? (
         <>
           <div className="flex items-center gap-2 mb-2">
             <Search size={15} color="var(--ink-soft)" />
@@ -203,134 +267,72 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
   );
 }
 
-/* ------------------------------ TRAINER SIDE ------------------------------ */
+/* ------------------------------ ШАГ ПРИЁМОВ ПИЩИ ------------------------------ */
 
-export function TrainerNutritionPanel({ client, onClientUpdated }) {
-  const [plan, setPlan] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [addingMeal, setAddingMeal] = useState(null);
-
-  const loadPlan = () => {
-    setLoading(true);
-    fetchMealPlan(client.id).then((p) => { setPlan(p); setLoading(false); });
-  };
-
-  useEffect(() => { loadPlan(); }, [client.id]);
-
-  const handleAddPlanItem = async (item) => {
-    await addMealPlanItem(client.id, item);
-    setAddingMeal(null);
-    loadPlan();
-  };
-
-  const handleRemovePlanItem = async (itemId) => {
-    setPlan((prev) => prev.filter((p) => p.id !== itemId));
-    await removeMealPlanItem(itemId);
-  };
-
+function MealCountStepper({ mealCount, onChange }) {
   return (
-    <div>
-      <NutritionCalculator
-        client={client}
-        onProfileSaved={onClientUpdated}
-        onGoalsApplied={onClientUpdated}
-      />
-
-      <div className="flex items-center gap-1.5 mb-3">
-        <ClipboardList size={15} color="var(--accent)" />
-        <h3 className="fp-display font-semibold">Готовый рацион</h3>
+    <div className="flex items-center justify-between mb-4 fp-card p-3" style={{ background: "var(--bg)" }}>
+      <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Приёмов пищи в день</span>
+      <div className="flex items-center gap-3">
+        <button className="fp-btn fp-btn-outline p-1.5 disabled:opacity-30" disabled={mealCount <= 1} onClick={() => onChange(mealCount - 1)}><Minus size={13} /></button>
+        <span className="font-semibold text-sm w-4 text-center">{mealCount}</span>
+        <button className="fp-btn fp-btn-outline p-1.5 disabled:opacity-30" disabled={mealCount >= 8} onClick={() => onChange(mealCount + 1)}><Plus size={13} /></button>
       </div>
-      <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
-        Пропишите конкретные продукты по приёмам пищи — клиент увидит их в дневнике питания
-        и сможет отметить галочкой «съедено» или залогировать что-то своё вручную.
-      </p>
-
-      {loading ? (
-        <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
-      ) : (
-        MEALS.map((meal) => {
-          const items = plan.filter((p) => p.meal === meal.id);
-          const MealIcon = meal.icon;
-          return (
-            <div key={meal.id} className="fp-card p-4 mb-3">
-              <div className="flex items-center gap-2 mb-2">
-                <MealIcon size={15} color="var(--ink-soft)" />
-                <span className="font-semibold text-sm">{meal.label}</span>
-              </div>
-              {items.length > 0 && (
-                <ul className="text-sm space-y-1.5 mb-2">
-                  {items.map((it) => (
-                    <li key={it.id} className="flex justify-between items-center gap-2">
-                      <span>{it.name} <span style={{ color: "var(--ink-soft)" }}>· {it.qty} × {it.serving_label || "порция"}</span></span>
-                      <span className="flex items-center gap-2 flex-shrink-0">
-                        <span style={{ color: "var(--ink-soft)" }}>{Math.round(it.kcal)} ккал</span>
-                        <button onClick={() => handleRemovePlanItem(it.id)}><X size={13} color="var(--ink-soft)" /></button>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {addingMeal === meal.id ? (
-                <LogFoodForm meal={meal.id} onAdd={handleAddPlanItem} onCancel={() => setAddingMeal(null)} submitLabel="Добавить в план" />
-              ) : (
-                <button className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }} onClick={() => setAddingMeal(meal.id)}>
-                  <Plus size={12} /> Добавить в рацион
-                </button>
-              )}
-            </div>
-          );
-        })
-      )}
     </div>
   );
 }
 
-/* ------------------------------- CLIENT SIDE ------------------------------- */
+/* ------------------------------ ОБЩИЙ ДНЕВНИК (клиент + тренер) ------------------------------ */
 
-export function NutritionTab({ client }) {
+function NutritionDiary({ client, canEditMealCount, onClientUpdated }) {
+  const [date, setDate] = useState(todayStr());
   const [entries, setEntries] = useState([]);
   const [plan, setPlan] = useState([]);
   const [loading, setLoading] = useState(true);
   const [addingMeal, setAddingMeal] = useState(null);
-  const today = todayStr();
+  const [mealCount, setMealCount] = useState(client.meal_count || 4);
+
+  const meals = generateMeals(mealCount);
 
   const load = () => {
     setLoading(true);
-    Promise.all([fetchNutritionForDate(client.id, today), fetchMealPlan(client.id)]).then(([e, p]) => {
-      setEntries(e);
-      setPlan(p);
-      setLoading(false);
+    Promise.all([fetchNutritionForDate(client.id, date), fetchMealPlan(client.id)]).then(([e, p]) => {
+      setEntries(e); setPlan(p); setLoading(false);
     });
   };
-
-  useEffect(() => { load(); }, [client.id]);
+  useEffect(() => { load(); }, [client.id, date]);
 
   const handleAdd = async (entry) => {
-    await addNutritionEntry(client.id, today, entry);
+    await addNutritionEntry(client.id, date, entry);
     setAddingMeal(null);
     load();
   };
-
   const handleRemove = async (entryId) => {
     setEntries((prev) => prev.filter((e) => e.id !== entryId));
     await removeNutritionEntry(entryId);
   };
-
   const handleCheckPlanItem = async (planItem) => {
-    await addNutritionEntry(client.id, today, {
+    await addNutritionEntry(client.id, date, {
       foodId: null, name: planItem.name, servingLabel: planItem.serving_label, meal: planItem.meal,
       qty: planItem.qty, kcal: planItem.kcal, protein: planItem.protein, carbs: planItem.carbs, fat: planItem.fat,
     });
     load();
   };
+  const handleMealCountChange = async (n) => {
+    setMealCount(n);
+    const updated = await updateClientProfile(client.id, { meal_count: n });
+    onClientUpdated?.(updated);
+  };
 
   const totals = macroTotals(entries);
   const goals = client.goals || { kcal: 2000, protein: 120, carbs: 220, fat: 60 };
 
-  if (loading) return <p className="text-sm px-4" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
+  if (loading && entries.length === 0) return <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
 
   return (
-    <div className="px-4">
+    <div>
+      <DateNav date={date} onChange={setDate} />
+
       <div className="fp-card p-5 mb-5 flex flex-col items-center">
         <Ring value={totals.kcal} max={goals.kcal} size={158} strokeWidth={14} color="var(--accent)">
           <div className="text-center">
@@ -361,16 +363,18 @@ export function NutritionTab({ client }) {
         </div>
       </div>
 
-      {MEALS.map((meal) => {
-        const items = entries.filter((e) => (e.meal || "snack") === meal.id);
+      {canEditMealCount && <MealCountStepper mealCount={mealCount} onChange={handleMealCountChange} />}
+
+      {meals.map((meal) => {
+        const items = entries.filter((e) => (e.meal || "meal_1") === meal.id);
         const planItems = plan.filter((p) => p.meal === meal.id);
         const loggedNames = new Set(items.map((e) => e.name));
+        const planNames = new Set(planItems.map((p) => p.name));
         const subtotal = macroTotals(items).kcal;
-        const MealIcon = meal.icon;
         return (
           <div key={meal.id} className="fp-card p-4 mb-3">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2"><MealIcon size={15} color="var(--ink-soft)" /><span className="font-semibold text-sm">{meal.label}</span></div>
+              <div className="flex items-center gap-2"><Utensils size={15} color="var(--ink-soft)" /><span className="font-semibold text-sm">{meal.label}</span></div>
               {items.length > 0 && <span className="text-xs" style={{ color: "var(--ink-soft)" }}>{Math.round(subtotal)} ккал</span>}
             </div>
 
@@ -381,13 +385,13 @@ export function NutritionTab({ client }) {
                   {planItems.map((p) => {
                     const done = loggedNames.has(p.name);
                     return (
-                      <li key={p.id} className="flex items-center gap-2">
-                        <button onClick={() => !done && handleCheckPlanItem(p)}>
-                          {done ? <CheckCircle2 size={16} color="var(--accent-2)" /> : <Circle size={16} color="var(--line)" />}
-                        </button>
+                      <li key={p.id} className="flex items-center justify-between gap-2">
                         <span style={{ color: done ? "var(--ink-soft)" : "var(--ink)", textDecoration: done ? "line-through" : "none" }}>
                           {p.name} <span style={{ color: "var(--ink-soft)" }}>· {p.qty} × {p.serving_label || "порция"}</span>
                         </span>
+                        <button onClick={() => !done && handleCheckPlanItem(p)} className="flex-shrink-0">
+                          {done ? <CheckCircle2 size={18} color="var(--accent-2)" /> : <Circle size={18} color="var(--line)" />}
+                        </button>
                       </li>
                     );
                   })}
@@ -397,15 +401,25 @@ export function NutritionTab({ client }) {
 
             {items.length > 0 && (
               <ul className="text-sm space-y-1.5 mb-2">
-                {items.map((e) => (
-                  <li key={e.id} className="flex justify-between items-center gap-2">
-                    <span>{e.name} <span style={{ color: "var(--ink-soft)" }}>· {e.qty} × {e.serving_label || "порция"}</span></span>
-                    <span className="flex items-center gap-2 flex-shrink-0">
-                      <span style={{ color: "var(--ink-soft)" }}>{Math.round(e.kcal)} ккал</span>
-                      <button onClick={() => handleRemove(e.id)}><X size={13} color="var(--ink-soft)" /></button>
-                    </span>
-                  </li>
-                ))}
+                {items.map((e) => {
+                  const offPlan = !planNames.has(e.name);
+                  return (
+                    <li
+                      key={e.id}
+                      className="flex justify-between items-center gap-2"
+                      style={offPlan ? { background: "rgba(255,106,61,0.1)", borderRadius: 8, padding: "4px 8px", margin: "0 -8px" } : undefined}
+                    >
+                      <span>
+                        {e.name} <span style={{ color: "var(--ink-soft)" }}>· {e.qty} × {e.serving_label || "порция"}</span>
+                        {offPlan && <span className="text-[10px] ml-1.5" style={{ color: "var(--accent)" }}>не по плану</span>}
+                      </span>
+                      <span className="flex items-center gap-2 flex-shrink-0">
+                        <span style={{ color: "var(--ink-soft)" }}>{Math.round(e.kcal)} ккал</span>
+                        <button onClick={() => handleRemove(e.id)}><X size={13} color="var(--ink-soft)" /></button>
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
@@ -419,6 +433,121 @@ export function NutritionTab({ client }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/* ------------------------------ TRAINER SIDE ------------------------------ */
+
+export function TrainerNutritionPanel({ client, onClientUpdated }) {
+  const [tab, setTab] = useState("plan"); // 'plan' | 'diary'
+  const [plan, setPlan] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [addingMeal, setAddingMeal] = useState(null);
+  const mealCount = client.meal_count || 4;
+  const meals = generateMeals(mealCount);
+
+  const loadPlan = () => {
+    setLoading(true);
+    fetchMealPlan(client.id).then((p) => { setPlan(p); setLoading(false); });
+  };
+
+  useEffect(() => { loadPlan(); }, [client.id]);
+
+  const handleAddPlanItem = async (item) => {
+    await addMealPlanItem(client.id, item);
+    setAddingMeal(null);
+    loadPlan();
+  };
+
+  const handleRemovePlanItem = async (itemId) => {
+    setPlan((prev) => prev.filter((p) => p.id !== itemId));
+    await removeMealPlanItem(itemId);
+  };
+
+  return (
+    <div>
+      <NutritionCalculator
+        client={client}
+        onProfileSaved={onClientUpdated}
+        onGoalsApplied={onClientUpdated}
+      />
+
+      <div className="flex gap-4 mb-4" style={{ borderBottom: "1px solid var(--line)" }}>
+        <button
+          onClick={() => setTab("plan")}
+          className="text-sm pb-2"
+          style={{ fontWeight: 600, color: tab === "plan" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "plan" ? "2px solid var(--accent)" : "none" }}
+        >Готовый рацион</button>
+        <button
+          onClick={() => setTab("diary")}
+          className="text-sm pb-2"
+          style={{ fontWeight: 600, color: tab === "diary" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "diary" ? "2px solid var(--accent)" : "none" }}
+        >Дневник по дням</button>
+      </div>
+
+      {tab === "diary" ? (
+        <NutritionDiary client={client} canEditMealCount onClientUpdated={onClientUpdated} />
+      ) : (
+        <>
+          <div className="flex items-center gap-1.5 mb-3">
+            <ClipboardList size={15} color="var(--accent)" />
+            <h3 className="fp-display font-semibold">Готовый рацион</h3>
+          </div>
+          <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
+            Пропишите конкретные продукты по приёмам пищи — клиент увидит их в дневнике питания
+            и сможет отметить галочкой «съедено» или залогировать что-то своё вручную.
+            Загляните в «Дневник по дням», чтобы посмотреть и при необходимости поправить, что клиент
+            реально ел в любой день — например, если он не успел внести данные сам.
+          </p>
+
+          {loading ? (
+            <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
+          ) : (
+            meals.map((meal) => {
+              const items = plan.filter((p) => p.meal === meal.id);
+              return (
+                <div key={meal.id} className="fp-card p-4 mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Utensils size={15} color="var(--ink-soft)" />
+                    <span className="font-semibold text-sm">{meal.label}</span>
+                  </div>
+                  {items.length > 0 && (
+                    <ul className="text-sm space-y-1.5 mb-2">
+                      {items.map((it) => (
+                        <li key={it.id} className="flex justify-between items-center gap-2">
+                          <span>{it.name} <span style={{ color: "var(--ink-soft)" }}>· {it.qty} × {it.serving_label || "порция"}</span></span>
+                          <span className="flex items-center gap-2 flex-shrink-0">
+                            <span style={{ color: "var(--ink-soft)" }}>{Math.round(it.kcal)} ккал</span>
+                            <button onClick={() => handleRemovePlanItem(it.id)}><X size={13} color="var(--ink-soft)" /></button>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {addingMeal === meal.id ? (
+                    <LogFoodForm meal={meal.id} onAdd={handleAddPlanItem} onCancel={() => setAddingMeal(null)} submitLabel="Добавить в план" />
+                  ) : (
+                    <button className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }} onClick={() => setAddingMeal(meal.id)}>
+                      <Plus size={12} /> Добавить в рацион
+                    </button>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------- CLIENT SIDE ------------------------------- */
+
+export function NutritionTab({ client, onClientUpdated }) {
+  return (
+    <div className="px-4">
+      <NutritionDiary client={client} canEditMealCount onClientUpdated={onClientUpdated} />
     </div>
   );
 }
