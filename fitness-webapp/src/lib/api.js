@@ -680,3 +680,36 @@ export async function addClientAchievement(clientId, achievementKey) {
     .insert({ client_id: clientId, achievement_key: achievementKey });
   if (error && error.code !== "23505") throw error; // 23505 = уже есть, это нормально
 }
+
+/* ------------------------- НАСТРОЙКИ УВЕДОМЛЕНИЙ ------------------------- */
+
+export async function fetchNotificationPreferences(authUserId) {
+  const { data, error } = await supabase
+    .from("notification_preferences")
+    .select("*")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || { notify_messages: true, notify_workouts: true };
+}
+
+export async function updateNotificationPreferences(authUserId, prefs) {
+  const { error } = await supabase.from("notification_preferences").upsert(
+    { auth_user_id: authUserId, ...prefs, updated_at: new Date().toISOString() },
+    { onConflict: "auth_user_id" }
+  );
+  if (error) throw error;
+}
+
+/* ------------------------------ АККАУНТ ------------------------------ */
+
+export async function changePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+export async function updateTrainerProfile(trainerId, fields) {
+  const { data, error } = await supabase.from("trainers").update(fields).eq("id", trainerId).select().single();
+  if (error) throw error;
+  return data;
+}
