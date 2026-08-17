@@ -517,7 +517,7 @@ function OnboardingForm({ client, onDone }) {
   );
 }
 
-function ClientHome({ client, onLogout, authUserId, theme, setTheme }) {
+function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpdated }) {
   const [tab, setTab] = useState("today");
   const [workouts, setWorkouts] = useState([]);
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
@@ -677,7 +677,7 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme }) {
             })()}
           </div>
         )}
-        {tab === "nutrition" && <NutritionTab client={client} />}
+        {tab === "nutrition" && <NutritionTab client={client} onClientUpdated={onClientUpdated} />}
         {tab === "progress" && <ProgressTab client={client} />}
         {tab === "chat" && isVip && (
           <ChatPanel clientId={client.id} currentSender={client.name} senderRole="client" authUserId={authUserId} />
@@ -1193,7 +1193,7 @@ export default function App() {
   if (client) {
     if (!client.subscription_active) return <SubscribeGate client={client} onPaid={setClient} />;
     if (!client.onboarding_complete) return <OnboardingForm client={client} onDone={setClient} />;
-    return <ClientHome client={client} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} />;
+    return <ClientHome client={client} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} onClientUpdated={setClient} />;
   }
 
   return (
