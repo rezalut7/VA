@@ -39,8 +39,16 @@ export default async function handler(req, res) {
       .from("trainers")
       .select("auth_user_id")
       .in("id", trainerIds);
-    const recipientAuthIds = (trainers || []).map((t) => t.auth_user_id).filter(Boolean);
-    if (recipientAuthIds.length === 0) return res.status(200).json({ skipped: "no recipients" });
+    const recipientAuthIdsRaw = (trainers || []).map((t) => t.auth_user_id).filter(Boolean);
+    if (recipientAuthIdsRaw.length === 0) return res.status(200).json({ skipped: "no recipients" });
+
+    const { data: prefs } = await supabaseAdmin
+      .from("notification_preferences")
+      .select("auth_user_id, notify_workouts")
+      .in("auth_user_id", recipientAuthIdsRaw);
+    const optedOut = new Set((prefs || []).filter((p) => p.notify_workouts === false).map((p) => p.auth_user_id));
+    const recipientAuthIds = recipientAuthIdsRaw.filter((id) => !optedOut.has(id));
+    if (recipientAuthIds.length === 0) return res.status(200).json({ skipped: "all opted out" });
 
     const { data: subs } = await supabaseAdmin
       .from("push_subscriptions")

@@ -29,6 +29,13 @@ export default async function handler(req, res) {
       .maybeSingle();
     if (!client?.auth_user_id) return res.status(200).json({ skipped: "no client" });
 
+    const { data: pref } = await supabaseAdmin
+      .from("notification_preferences")
+      .select("notify_workouts")
+      .eq("auth_user_id", client.auth_user_id)
+      .maybeSingle();
+    if (pref?.notify_workouts === false) return res.status(200).json({ skipped: "opted out" });
+
     const { data: subs } = await supabaseAdmin
       .from("push_subscriptions")
       .select("*")

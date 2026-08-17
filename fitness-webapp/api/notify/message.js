@@ -53,6 +53,15 @@ export default async function handler(req, res) {
 
     if (recipientAuthIds.length === 0) return res.status(200).json({ skipped: "no recipients" });
 
+    // Отфильтровываем тех, кто выключил уведомления о сообщениях в настройках.
+    const { data: prefs } = await supabaseAdmin
+      .from("notification_preferences")
+      .select("auth_user_id, notify_messages")
+      .in("auth_user_id", recipientAuthIds);
+    const optedOut = new Set((prefs || []).filter((p) => p.notify_messages === false).map((p) => p.auth_user_id));
+    recipientAuthIds = recipientAuthIds.filter((id) => !optedOut.has(id));
+    if (recipientAuthIds.length === 0) return res.status(200).json({ skipped: "all opted out" });
+
     const { data: subs } = await supabaseAdmin
       .from("push_subscriptions")
       .select("*")
