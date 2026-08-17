@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Trash2, CalendarDays, Zap, Plus, X } from "lucide-react";
+import { Trash2, CalendarDays, Zap, Plus, X, Copy } from "lucide-react";
 import { AssignWorkoutForm, formatSets } from "./Workouts";
-import { fetchMicrocycles, createMicrocycle, deleteMicrocycle, createWorkout, fetchCheckins } from "../lib/api";
+import { fetchMicrocycles, createMicrocycle, deleteMicrocycle, createWorkout, fetchCheckins, fetchTemplates } from "../lib/api";
 import { resolveExerciseType } from "../data/exerciseTypes";
 import { GOAL_OPTIONS, GOAL_CORRIDORS, WEEK_TYPE_META, calcWeekTarget } from "../lib/periodizationEngine";
 
@@ -15,15 +15,52 @@ function resolveExerciseMeta(ex) {
   return { base, equipment, side: null };
 }
 
-function MicrocycleBuilder({ onSave, onCancel }) {
+function TemplatePicker({ trainer, onPick, onCancel }) {
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { fetchTemplates(trainer.id).then((t) => { setTemplates(t); setLoading(false); }); }, [trainer.id]);
+
+  return (
+    <div className="fp-card p-3 mb-4" style={{ background: "var(--bg)" }}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>ВЫБЕРИТЕ ШАБЛОН ТРЕНИРОВКИ</span>
+        <button onClick={onCancel}><X size={15} color="var(--ink-soft)" /></button>
+      </div>
+      {loading ? (
+        <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
+      ) : templates.length === 0 ? (
+        <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Шаблонов пока нет — сначала создайте их в разделе «Шаблоны тренировок» на Обзоре.</p>
+      ) : (
+        <div className="space-y-2">
+          {templates.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onPick(t.title, t.exercises.map((e) => ({
+                name: e.name, sets: e.sets, isAssisted: e.is_assisted, periodizationEnabled: e.periodization_enabled,
+                baseName: e.base_name, equipment: e.equipment, side: e.side,
+              })))}
+              className="fp-card w-full p-2.5 text-left flex items-center justify-between"
+            >
+              <span className="text-sm">{t.title}</span>
+              <span className="text-xs" style={{ color: "var(--ink-soft)" }}>{t.exercises.length} упр.</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MicrocycleBuilder({ trainer, onSave, onCancel }) {
   const [title, setTitle] = useState("");
   const [days, setDays] = useState([]);
-  const [addingDay, setAddingDay] = useState(false);
+  const [dayMode, setDayMode] = useState(null); // null | 'new' | 'template'
   const [busy, setBusy] = useState(false);
 
   const finishDay = (dayTitle, items) => {
     setDays((prev) => [...prev, { title: dayTitle, items }]);
-    setAddingDay(false);
+    setDayMode(null);
   };
   const removeDay = (idx) => setDays((prev) => prev.filter((_, i) => i !== idx));
 
@@ -56,12 +93,19 @@ function MicrocycleBuilder({ onSave, onCancel }) {
         </div>
       )}
 
-      {addingDay ? (
-        <AssignWorkoutForm onAssign={finishDay} onCancel={() => setAddingDay(false)} />
+      {dayMode === "new" ? (
+        <AssignWorkoutForm onAssign={finishDay} onCancel={() => setDayMode(null)} />
+      ) : dayMode === "template" ? (
+        <TemplatePicker trainer={trainer} onPick={finishDay} onCancel={() => setDayMode(null)} />
       ) : (
-        <button className="fp-btn fp-btn-outline w-full py-2.5 mb-4 flex items-center justify-center gap-2" onClick={() => setAddingDay(true)}>
-          <Plus size={14} /> Добавить день
-        </button>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <button className="fp-btn fp-btn-outline py-2.5 flex items-center justify-center gap-2" onClick={() => setDayMode("new")}>
+            <Plus size={14} /> Новый день
+          </button>
+          <button className="fp-btn fp-btn-outline py-2.5 flex items-center justify-center gap-2" onClick={() => setDayMode("template")}>
+            <Copy size={14} /> Из шаблона
+          </button>
+        </div>
       )}
 
       <button
@@ -105,7 +149,7 @@ export function MicrocycleManager({ trainer }) {
       </p>
 
       {building ? (
-        <MicrocycleBuilder onSave={handleSave} onCancel={() => setBuilding(false)} />
+        <MicrocycleBuilder trainer={trainer} onSave={handleSave} onCancel={() => setBuilding(false)} />
       ) : (
         <button className="fp-btn fp-btn-accent px-4 py-2.5 mb-5" onClick={() => setBuilding(true)}>+ Новый микроцикл</button>
       )}

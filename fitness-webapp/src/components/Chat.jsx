@@ -1,26 +1,99 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Send, MessageCircle, ChevronLeft } from "lucide-react";
+import { Send, MessageCircle, Paperclip, X } from "lucide-react";
 import {
   fetchChatMessages, sendChatMessage, subscribeToChatMessages,
-  markChatRead, fetchTrainerInbox,
+  markChatRead, fetchTrainerInbox, uploadChatAttachment,
+  fetchReactionsForMessages, subscribeToChatReactions, toggleChatReaction,
 } from "../lib/api";
+
+const QUICK_EMOJI = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const NAV_REST_BOTTOM = "calc(78px + env(safe-area-inset-bottom, 0px))";
+
+function formatTime(iso) {
+  return new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+function dateLabel(iso) {
+  const d = new Date(iso);
+  const today = new Date();
+  const yest = new Date(); yest.setDate(yest.getDate() - 1);
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  if (sameDay(d, today)) return "Сегодня";
+  if (sameDay(d, yest)) return "Вчера";
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+}
+
+// Отслеживаем реальную видимую высоту вьюпорта — на iOS клавиатура не
+// сжимает окно, а просто перекрывает его, поэтому обычный fixed bottom:0
+// прячется под клавиатурой. visualViewport даёт настоящую видимую высоту.
+function useKeyboardOffset() {
+  const [offset, setOffset] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => setOffset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    vv.addEventListener("resize", handler);
+    vv.addEventListener("scroll", handler);
+    handler();
+    return () => { vv.removeEventListener("resize", handler); vv.removeEventListener("scroll", handler); };
+  }, []);
+  return offset;
+}
+
+function ReactionBar({ messageId, reactions, authUserId, onToggle }) {
+  const grouped = {};
+  reactions.forEach((r) => { grouped[r.emoji] = (grouped[r.emoji] || 0) + 1; });
+  const myReaction = reactions.find((r) => r.auth_user_id === authUserId)?.emoji;
+  if (Object.keys(grouped).length === 0) return null;
+  return (
+    <div className="flex gap-1 mt-1 flex-wrap">
+      {Object.entries(grouped).map(([emoji, count]) => (
+        <button
+          key={emoji}
+          onClick={() => onToggle(messageId, emoji)}
+          className="text-xs flex items-center gap-0.5 px-1.5 py-0.5"
+          style={{
+            borderRadius: 10, border: "1px solid var(--line)",
+            background: myReaction === emoji ? "rgba(10,132,255,0.12)" : "var(--surface)",
+          }}
+        >{emoji} {count}</button>
+      ))}
+    </div>
+  );
+}
 
 export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
   const [messages, setMessages] = useState([]);
+  const [reactions, setReactions] = useState([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pickerFor, setPickerFor] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const keyboardOffset = useKeyboardOffset();
 
   useEffect(() => {
     setLoading(true);
-    fetchChatMessages(clientId).then((m) => { setMessages(m); setLoading(false); });
+    fetchChatMessages(clientId).then((m) => {
+      setMessages(m);
+      setLoading(false);
+      fetchReactionsForMessages(m.map((x) => x.id)).then(setReactions);
+    });
     if (authUserId) markChatRead(authUserId, clientId);
 
-    const unsubscribe = subscribeToChatMessages(clientId, (msg) => {
+    const unsubMsgs = subscribeToChatMessages(clientId, (msg) => {
       setMessages((prev) => [...prev, msg]);
       if (authUserId) markChatRead(authUserId, clientId);
     });
-    return unsubscribe;
+    const unsubReactions = subscribeToChatReactions((payload) => {
+      setReactions((prev) => {
+        if (payload.eventType === "DELETE") return prev.filter((r) => r.id !== payload.old.id);
+        if (payload.eventType === "INSERT") return [...prev, payload.new];
+        if (payload.eventType === "UPDATE") return prev.map((r) => (r.id === payload.new.id ? payload.new : r));
+        return prev;
+      });
+    });
+    return () => { unsubMsgs(); unsubReactions(); };
   }, [clientId]);
 
   useEffect(() => {
@@ -34,44 +107,116 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
     await sendChatMessage(clientId, currentSender, senderRole, t);
   };
 
+  const handleFilePick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const attachment = await uploadChatAttachment(file);
+      await sendChatMessage(clientId, currentSender, senderRole, text.trim() || null, attachment);
+      setText("");
+    } catch (err) {
+      // молча — пользователь просто не увидит новое сообщение, не критично
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleToggleReaction = async (messageId, emoji) => {
+    setPickerFor(null);
+    await toggleChatReaction(messageId, authUserId, emoji);
+  };
+
   if (loading) return <p className="text-sm px-4" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
 
+  const inputBottom = keyboardOffset > 0 ? keyboardOffset : NAV_REST_BOTTOM;
+
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 150px)" }}>
-      <div className="flex-1 overflow-y-auto px-4 space-y-3 fp-scroll">
+    <div>
+      <div
+        className="px-4 space-y-1 fp-scroll"
+        style={{ paddingBottom: `calc(${keyboardOffset > 0 ? `${keyboardOffset}px` : NAV_REST_BOTTOM} + 76px)` }}
+      >
         {messages.length === 0 && (
           <p className="text-sm text-center mt-8" style={{ color: "var(--ink-soft)" }}>Сообщений пока нет — напишите первым.</p>
         )}
-        {messages.map((m) => {
+        {messages.map((m, i) => {
           const mine = m.from_name === currentSender;
+          const showDateSep = i === 0 || dateLabel(m.created_at) !== dateLabel(messages[i - 1].created_at);
+          const msgReactions = reactions.filter((r) => r.message_id === m.id);
           return (
-            <div key={m.id} style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
-              <div
-                className="p-2.5"
-                style={{
-                  maxWidth: "75%", borderRadius: 16,
-                  borderBottomRightRadius: mine ? 5 : 16,
-                  borderBottomLeftRadius: mine ? 16 : 5,
-                  background: mine ? "#0A84FF" : "var(--surface)",
-                  color: mine ? "#fff" : "var(--ink)",
-                  border: mine ? "none" : "1px solid var(--line)",
-                  boxShadow: mine ? "none" : "0 1px 2px rgba(0,0,0,0.04)",
-                }}
-              >
-                {!mine && <div className="text-xs font-semibold mb-0.5" style={{ opacity: 0.6 }}>{m.from_name}</div>}
-                <div className="text-sm" style={{ lineHeight: 1.35 }}>{m.text}</div>
+            <React.Fragment key={m.id}>
+              {showDateSep && (
+                <div className="text-center my-3">
+                  <span className="text-[11px] px-2 py-0.5" style={{ color: "var(--ink-soft)", background: "var(--bg)", borderRadius: 8 }}>
+                    {dateLabel(m.created_at)}
+                  </span>
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start", marginBottom: 6 }}>
+                <div
+                  onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)}
+                  className="p-2.5"
+                  style={{
+                    maxWidth: "75%", borderRadius: 16, cursor: "pointer",
+                    borderBottomRightRadius: mine ? 5 : 16,
+                    borderBottomLeftRadius: mine ? 16 : 5,
+                    background: mine ? "#0A84FF" : "var(--surface)",
+                    color: mine ? "#fff" : "var(--ink)",
+                    border: mine ? "none" : "1px solid var(--line)",
+                    boxShadow: mine ? "none" : "0 1px 2px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  {!mine && <div className="text-xs font-semibold mb-0.5" style={{ opacity: 0.6 }}>{m.from_name}</div>}
+                  {m.attachment_url && (
+                    m.attachment_type === "video" ? (
+                      <video src={m.attachment_url} controls playsInline preload="metadata" style={{ width: "100%", maxWidth: 220, borderRadius: 10, marginBottom: m.text ? 6 : 0 }} />
+                    ) : (
+                      <img src={m.attachment_url} alt="" style={{ width: "100%", maxWidth: 220, borderRadius: 10, marginBottom: m.text ? 6 : 0 }} />
+                    )
+                  )}
+                  {m.text && <div className="text-sm" style={{ lineHeight: 1.35 }}>{m.text}</div>}
+                  <div className="text-[10px] mt-1" style={{ opacity: 0.6, textAlign: "right" }}>{formatTime(m.created_at)}</div>
+                </div>
+
+                {pickerFor === m.id && (
+                  <div className="flex gap-1.5 mt-1.5 p-1.5 fp-card" style={{ background: "var(--surface)" }}>
+                    {QUICK_EMOJI.map((e) => (
+                      <button key={e} onClick={() => handleToggleReaction(m.id, e)} style={{ fontSize: 18, lineHeight: 1 }}>{e}</button>
+                    ))}
+                  </div>
+                )}
+
+                <ReactionBar messageId={m.id} reactions={msgReactions} authUserId={authUserId} onToggle={handleToggleReaction} />
               </div>
-            </div>
+            </React.Fragment>
           );
         })}
         <div ref={bottomRef} />
       </div>
-      <div className="flex items-center gap-2 px-4 py-3" style={{ borderTop: "1px solid var(--line)" }}>
+
+      <div
+        className="flex items-center gap-2 px-4 py-3"
+        style={{
+          position: "fixed", left: 0, right: 0, bottom: inputBottom, zIndex: 45,
+          background: "var(--surface)", borderTop: "1px solid var(--line)",
+        }}
+      >
+        <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={handleFilePick} style={{ display: "none" }} />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+          style={{ width: 34, height: 34 }}
+        >
+          <Paperclip size={18} color="var(--ink-soft)" />
+        </button>
         <input
           className="fp-input"
           style={{ borderRadius: 20 }}
-          placeholder="Написать сообщение…"
+          placeholder={uploading ? "Отправляем вложение…" : "Написать сообщение…"}
           value={text}
+          disabled={uploading}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
         />
@@ -129,7 +274,7 @@ export function TrainerInbox({ trainer, clients, onOpenChat }) {
               )}
             </div>
             <p className="text-xs truncate" style={{ color: "var(--ink-soft)" }}>
-              {lastMessage ? lastMessage.text : "Сообщений пока нет"}
+              {lastMessage ? (lastMessage.text || (lastMessage.attachment_type === "video" ? "📹 Видео" : "📷 Фото")) : "Сообщений пока нет"}
             </p>
           </div>
         </button>
