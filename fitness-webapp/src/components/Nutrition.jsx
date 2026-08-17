@@ -7,12 +7,53 @@ import {
 } from "../lib/api";
 import { NutritionCalculator } from "./NutritionCalculator";
 
+function CollapsibleCalculator({ client, onProfileSaved, onGoalsApplied }) {
+  const [open, setOpen] = useState(false);
+  const goals = client.goals;
+  return (
+    <div className="mb-4">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="fp-card w-full p-3 flex items-center justify-between text-left"
+      >
+        <span className="text-sm font-medium">
+          Счётчик КБЖУ {goals ? `— норма ${goals.kcal} ккал` : "— норма не задана"}
+        </span>
+        <span className="text-xs" style={{ color: "var(--accent)" }}>{open ? "Свернуть ▲" : "Открыть и поправить ▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-2">
+          <NutritionCalculator client={client} onProfileSaved={onProfileSaved} onGoalsApplied={onGoalsApplied} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function generateMeals(count) {
   return Array.from({ length: Math.max(1, count) }, (_, i) => ({ id: `meal_${i + 1}`, label: `Приём ${i + 1}` }));
 }
 
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  return toDateStr(new Date());
+}
+
+// Сдвиг даты на N дней — работает со строкой в локальном времени от начала
+// до конца, не проходя через toISOString() (который переводит в UTC и в
+// часовых поясах восточнее Гринвича может "съедать" день при обратной
+// конвертации — из-за этого календарь и перескакивал/не пускал вперёд).
+function shiftDateStr(dateStr, delta) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + delta);
+  return toDateStr(dt);
 }
 
 function macroTotals(entries) {
@@ -50,14 +91,11 @@ function Ring({ value, max, size = 140, strokeWidth = 12, color = "var(--accent)
 /* ------------------------------ КАЛЕНДАРЬ ДНЯ ------------------------------ */
 
 function DateNav({ date, onChange }) {
-  const d = new Date(date + "T00:00:00");
+  const [y, m, d] = date.split("-").map(Number);
+  const localDate = new Date(y, m - 1, d);
   const isToday = date === todayStr();
-  const label = d.toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "short" });
-  const shift = (delta) => {
-    const nd = new Date(d);
-    nd.setDate(nd.getDate() + delta);
-    onChange(nd.toISOString().slice(0, 10));
-  };
+  const label = localDate.toLocaleDateString("ru-RU", { weekday: "short", day: "numeric", month: "short" });
+  const shift = (delta) => onChange(shiftDateStr(date, delta));
   return (
     <div className="flex items-center justify-between mb-4">
       <button onClick={() => shift(-1)} className="fp-btn fp-btn-outline p-2"><ChevronLeft size={16} /></button>
@@ -467,38 +505,34 @@ export function TrainerNutritionPanel({ client, onClientUpdated }) {
 
   return (
     <div>
-      <NutritionCalculator
-        client={client}
-        onProfileSaved={onClientUpdated}
-        onGoalsApplied={onClientUpdated}
-      />
-
       <div className="flex gap-4 mb-4" style={{ borderBottom: "1px solid var(--line)" }}>
         <button
           onClick={() => setTab("plan")}
           className="text-sm pb-2"
           style={{ fontWeight: 600, color: tab === "plan" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "plan" ? "2px solid var(--accent)" : "none" }}
-        >Готовый рацион</button>
+        >Меню</button>
         <button
           onClick={() => setTab("diary")}
           className="text-sm pb-2"
           style={{ fontWeight: 600, color: tab === "diary" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "diary" ? "2px solid var(--accent)" : "none" }}
-        >Дневник по дням</button>
+        >История</button>
       </div>
 
       {tab === "diary" ? (
         <NutritionDiary client={client} canEditMealCount onClientUpdated={onClientUpdated} />
       ) : (
         <>
+          <CollapsibleCalculator client={client} onProfileSaved={onClientUpdated} onGoalsApplied={onClientUpdated} />
+
           <div className="flex items-center gap-1.5 mb-3">
             <ClipboardList size={15} color="var(--accent)" />
-            <h3 className="fp-display font-semibold">Готовый рацион</h3>
+            <h3 className="fp-display font-semibold">Меню на каждый день</h3>
           </div>
           <p className="text-xs mb-4" style={{ color: "var(--ink-soft)" }}>
-            Пропишите конкретные продукты по приёмам пищи — клиент увидит их в дневнике питания
-            и сможет отметить галочкой «съедено» или залогировать что-то своё вручную.
-            Загляните в «Дневник по дням», чтобы посмотреть и при необходимости поправить, что клиент
-            реально ел в любой день — например, если он не успел внести данные сам.
+            Пропишите конкретные продукты по приёмам пищи с граммовками и КБЖУ — клиент увидит их
+            в своём дневнике и отметит галочкой «съедено» напротив каждого. Норму КБЖУ выше
+            считает калькулятор сам, корректировки — вручную, раскрыв его.
+            Вкладка «История» — календарь того, что клиент реально ел по дням, с возможностью поправить.
           </p>
 
           {loading ? (
