@@ -11,12 +11,13 @@ import { ProgressTab, TrainerProgressPanel } from "./components/Progress";
 import { TemplateManager, AssignFromTemplate, PeriodizationPanel } from "./components/Templates";
 import { ExerciseProgressSection, TrainerLeaderboard } from "./components/ExerciseProgress";
 import { MicrocycleManager, AssignMicrocycle } from "./components/Microcycles";
+import { NotificationSettingsCard, ProfileEditCard, PasswordChangeCard } from "./components/Settings";
 import { WEEK_TYPE_META } from "./lib/periodizationEngine";
 import { ExerciseLibraryManager } from "./components/ExerciseLibrary";
 import { enablePushNotifications, disablePushNotifications, pushSupported, PUSH_ERROR_MESSAGES } from "./lib/push";
 import {
   getSession, onAuthChange, signUp, signIn, signOut,
-  fetchTrainerByAuthId, fetchClientsForTrainer,
+  fetchTrainerByAuthId, fetchClientsForTrainer, updateTrainerProfile,
   fetchClientByAuthId, createClientProfile, activateSubscription, completeOnboarding, updateClientProfile,
   fetchWorkoutsForClient, createWorkout, deleteWorkout, toggleExerciseDone, saveWorkoutSession,
 } from "./lib/api";
@@ -708,36 +709,20 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
               </div>
             </div>
 
-            {pushSupported() && (
-              <div className="fp-card p-4 mb-3">
-                <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
-                  <Bell size={13} /> УВЕДОМЛЕНИЯ
-                </div>
-                {pushStatus === "on" ? (
-                  <>
-                    <p className="text-xs mb-2" style={{ color: "var(--accent-2)" }}>Уведомления включены ✓</p>
-                    <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleDisablePush} disabled={pushStatus === "busy"}>
-                      Отключить уведомления
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>
-                      Получайте push-уведомления о новых сообщениях от тренера.
-                    </p>
-                    <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleEnablePush} disabled={pushStatus === "busy"}>
-                      {pushStatus === "busy" ? "Включаем…" : "Включить уведомления"}
-                    </button>
-                    {pushStatus && pushStatus !== "busy" && PUSH_ERROR_MESSAGES[pushStatus] && (
-                      <div className="mt-2">
-                        <p className="text-xs" style={{ color: "var(--danger)" }}>{PUSH_ERROR_MESSAGES[pushStatus]}</p>
-                        {pushDetail && <p className="text-xs mt-1" style={{ color: "var(--ink-soft)" }}>Подробности: {pushDetail}</p>}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
+            <NotificationSettingsCard
+              pushSupportedNow={pushSupported()}
+              pushStatus={pushStatus}
+              pushDetail={pushDetail}
+              onEnable={handleEnablePush}
+              onDisable={handleDisablePush}
+              authUserId={authUserId}
+              messagesLabel="Сообщения от тренера"
+              workoutsLabel="Новые тренировки"
+            />
+
+            <ProfileEditCard name={client.name} onSaveName={async (n) => { const updated = await updateClientProfile(client.id, { name: n }); onClientUpdated?.(updated); }} />
+
+            <PasswordChangeCard />
 
             <button className="fp-btn fp-btn-outline w-full py-2.5 flex items-center justify-center gap-2" onClick={onLogout}>
               <LogOut size={14} /> Выйти
@@ -903,7 +888,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
   );
 }
 
-function TrainerHome({ trainer, clients, onLogout, authUserId, theme, setTheme }) {
+function TrainerHome({ trainer, clients, onLogout, authUserId, theme, setTheme, onTrainerUpdated }) {
   const [tab, setTab] = useState("overview");
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedClientTab, setSelectedClientTab] = useState("workouts");
@@ -1098,34 +1083,29 @@ function TrainerHome({ trainer, clients, onLogout, authUserId, theme, setTheme }
               </div>
             </div>
 
-            {pushSupported() && (
-              <div className="fp-card p-4 mb-3">
-                <div className="flex items-center gap-1.5 mb-2 text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>
-                  <Bell size={13} /> УВЕДОМЛЕНИЯ
-                </div>
-                {pushStatus === "on" ? (
-                  <>
-                    <p className="text-xs mb-2" style={{ color: "var(--accent-2)" }}>Уведомления включены ✓</p>
-                    <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleDisablePush} disabled={pushStatus === "busy"}>
-                      Отключить уведомления
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>Получайте push о новых сообщениях от клиентов.</p>
-                    <button className="fp-btn fp-btn-outline w-full py-2 text-xs" onClick={handleEnablePush} disabled={pushStatus === "busy"}>
-                      {pushStatus === "busy" ? "Включаем…" : "Включить уведомления"}
-                    </button>
-                    {pushStatus && pushStatus !== "busy" && PUSH_ERROR_MESSAGES[pushStatus] && (
-                      <div className="mt-2">
-                        <p className="text-xs" style={{ color: "var(--danger)" }}>{PUSH_ERROR_MESSAGES[pushStatus]}</p>
-                        {pushDetail && <p className="text-xs mt-1" style={{ color: "var(--ink-soft)" }}>Подробности: {pushDetail}</p>}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
+            <NotificationSettingsCard
+              pushSupportedNow={pushSupported()}
+              pushStatus={pushStatus}
+              pushDetail={pushDetail}
+              onEnable={handleEnablePush}
+              onDisable={handleDisablePush}
+              authUserId={authUserId}
+              messagesLabel="Сообщения от клиентов"
+              workoutsLabel="Завершённые тренировки"
+            />
+
+            <ProfileEditCard
+              name={trainer.name}
+              onSaveName={async (n) => { const updated = await updateTrainerProfile(trainer.id, { name: n }); onTrainerUpdated?.(updated); }}
+              extraFields={[
+                { key: "spec", label: "Специализация", value: trainer.spec || "" },
+                { key: "bio", label: "О себе", value: trainer.bio || "", multiline: true },
+              ]}
+              onSaveExtra={async (extra) => { const updated = await updateTrainerProfile(trainer.id, extra); onTrainerUpdated?.(updated); }}
+            />
+
+            <PasswordChangeCard />
+
             <button className="fp-btn fp-btn-outline w-full py-2.5 flex items-center justify-center gap-2" onClick={onLogout}>
               <LogOut size={14} /> Выйти
             </button>
@@ -1188,7 +1168,7 @@ export default function App() {
     return <LoginScreen onEnter={() => setScreen("entry")} />;
   }
 
-  if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} />;
+  if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} onTrainerUpdated={(updated) => setTrainer((prev) => ({ ...prev, ...updated }))} />;
 
   if (client) {
     if (!client.subscription_active) return <SubscribeGate client={client} onPaid={setClient} />;

@@ -224,18 +224,18 @@ input.fp-input:focus, select.fp-input:focus, textarea.fp-input:focus {
   top: 0; left: 0; right: 0;
   z-index: 30;
   background: var(--bg);
-  padding-top: max(env(safe-area-inset-top, 0px), 14px);
-  padding-bottom: 10px;
+  padding-top: max(env(safe-area-inset-top, 0px) + 8px, 22px);
+  padding-bottom: 14px;
   border-bottom: 1px solid var(--line);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .fp-content-with-header {
-  padding-top: calc(72px + env(safe-area-inset-top, 0px));
+  padding-top: calc(84px + env(safe-area-inset-top, 0px));
 }
 
 .fp-content-with-tall-header {
-  padding-top: calc(150px + env(safe-area-inset-top, 0px));
+  padding-top: calc(162px + env(safe-area-inset-top, 0px));
 }
 
 .fp-safe-top {
