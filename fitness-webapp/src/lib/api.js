@@ -322,12 +322,22 @@ export async function fetchChatMessages(clientId) {
   return data || [];
 }
 
-export async function sendChatMessage(clientId, fromName, senderRole, text) {
+export async function sendChatMessage(clientId, fromName, senderRole, text, attachment) {
   const { error } = await supabase.from("chat_messages").insert({
     client_id: clientId, from_name: fromName, sender_role: senderRole, text,
+    attachment_url: attachment?.url || null, attachment_type: attachment?.type || null,
   });
   if (error) throw error;
   await touchClient(clientId);
+}
+
+export async function uploadChatAttachment(file) {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${Date.now()}-${safeName}`;
+  const { error } = await supabase.storage.from("chat-attachments").upload(path, file);
+  if (error) throw error;
+  const { data } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+  return { url: data.publicUrl, type: file.type.startsWith("video") ? "video" : "image" };
 }
 
 // Живая подписка на новые сообщения в чате конкретного клиента.
@@ -342,6 +352,38 @@ export function subscribeToChatMessages(clientId, onInsert) {
     )
     .subscribe();
   return () => supabase.removeChannel(channel);
+}
+
+// Живая подписка на реакции по всем сообщениям чата (проще подписаться на
+// таблицу целиком и фильтровать на клиенте, чем городить join-фильтр).
+export function subscribeToChatReactions(onChange) {
+  const channel = supabase
+    .channel(`chat-reactions-${Math.random()}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "chat_reactions" }, onChange)
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+export async function fetchReactionsForMessages(messageIds) {
+  if (messageIds.length === 0) return [];
+  const { data, error } = await supabase.from("chat_reactions").select("*").in("message_id", messageIds);
+  if (error) throw error;
+  return data || [];
+}
+
+// Один пользователь — одна реакция на сообщение. Повторный тап той же
+// реакцией снимает её, другой — заменяет.
+export async function toggleChatReaction(messageId, authUserId, emoji) {
+  const { data: existing } = await supabase
+    .from("chat_reactions").select("*")
+    .eq("message_id", messageId).eq("auth_user_id", authUserId).maybeSingle();
+  if (existing && existing.emoji === emoji) {
+    await supabase.from("chat_reactions").delete().eq("id", existing.id);
+  } else if (existing) {
+    await supabase.from("chat_reactions").update({ emoji }).eq("id", existing.id);
+  } else {
+    await supabase.from("chat_reactions").insert({ message_id: messageId, auth_user_id: authUserId, emoji });
+  }
 }
 
 export async function markChatRead(authUserId, clientId) {
