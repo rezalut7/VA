@@ -7,11 +7,12 @@ import { GOAL_OPTIONS, GOAL_CORRIDORS, WEEK_TYPE_META, calcWeekTarget } from "..
 
 const WEEK_TYPE_ORDER = ["light", "medium", "heavy", "deload"];
 
-function extractExerciseMeta(fullName) {
-  const parts = (fullName || "").split(" - ");
-  const base = parts.length >= 2 ? parts[1] : fullName;
+function resolveExerciseMeta(ex) {
+  if (ex.base_name) return { base: ex.base_name, equipment: ex.equipment, side: ex.side };
+  const parts = (ex.name || "").split(" - ");
+  const base = parts.length >= 2 ? parts[1] : ex.name;
   const equipment = parts[2] || null;
-  return { base, equipment };
+  return { base, equipment, side: null };
 }
 
 function MicrocycleBuilder({ onSave, onCancel }) {
@@ -139,12 +140,13 @@ export function MicrocycleManager({ trainer }) {
   );
 }
 
-export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
+export function AssignMicrocycle({ trainer, client, onAssigned }) {
+  const clientId = client.id;
   const [microcycles, setMicrocycles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
   const [withPeriodization, setWithPeriodization] = useState(false);
-  const [goal, setGoal] = useState("Гипертрофия");
+  const [goal, setGoal] = useState(client.onboarding?.goal || "Гипертрофия");
   const [bodyWeight, setBodyWeight] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -159,10 +161,10 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
   // которые тренер сам вписал в шаблон — это "неделя 0", от неё считаем дальше.
   const buildPeriodizedExercises = (exercises, weekType) =>
     exercises.map((ex) => {
-      const passthrough = { name: ex.name, isAssisted: false, periodizationEnabled: ex.periodization_enabled };
+      const { base, equipment, side } = resolveExerciseMeta(ex);
+      const passthrough = { name: ex.name, isAssisted: false, periodizationEnabled: ex.periodization_enabled, baseName: base, equipment, side };
       if (ex.periodization_enabled === false) return { ...passthrough, sets: ex.sets };
-      const { base, equipment } = extractExerciseMeta(ex.name);
-      const type = resolveExerciseType(base, equipment);
+      const type = resolveExerciseType(base, equipment, side);
       const anchorWeight = parseFloat(ex.sets[0]?.weight);
       const anchorReps = parseFloat(ex.sets[0]?.reps);
       if (!type || isNaN(anchorWeight) || isNaN(anchorReps) || anchorWeight <= 0) return { ...passthrough, sets: ex.sets };
@@ -179,7 +181,7 @@ export function AssignMicrocycle({ trainer, clientId, onAssigned }) {
       for (const day of selected.workouts) {
         await createWorkout(
           clientId, `${selected.title} — ${day.title}`,
-          day.exercises.map((e) => ({ name: e.name, sets: e.sets, isAssisted: e.is_assisted, periodizationEnabled: e.periodization_enabled }))
+          day.exercises.map((e) => ({ name: e.name, sets: e.sets, isAssisted: e.is_assisted, periodizationEnabled: e.periodization_enabled, baseName: e.base_name, equipment: e.equipment, side: e.side }))
         );
       }
     } else {

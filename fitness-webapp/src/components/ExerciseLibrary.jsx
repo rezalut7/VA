@@ -276,14 +276,21 @@ function splitDescriptionParagraphs(text) {
 // Общий хук — description всегда из строки с базовым именем (одно на все
 // вариации), video_url — из наиболее специфичной существующей строки
 // (снаряд конкретной вариации → общая/запасная строка).
-export function useExerciseDetail(fullExerciseName) {
+export function useExerciseDetail(exercise) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
+  const fullExerciseName = typeof exercise === "string" ? exercise : exercise?.name;
 
   useEffect(() => {
     setLoading(true);
-    const baseName = extractBaseName(fullExerciseName);
-    const videoKeys = extractVideoKeys(fullExerciseName);
+    let baseName, videoKeys;
+    if (exercise && typeof exercise === "object" && exercise.base_name) {
+      baseName = exercise.base_name;
+      videoKeys = exercise.equipment ? [detailKey(baseName, exercise.equipment), baseName] : [baseName];
+    } else {
+      baseName = extractBaseName(fullExerciseName);
+      videoKeys = extractVideoKeys(fullExerciseName);
+    }
     (async () => {
       const [baseRow, ...videoRows] = await Promise.all([
         fetchExerciseDetail(baseName).catch(() => null),

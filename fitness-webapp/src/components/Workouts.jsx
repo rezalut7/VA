@@ -47,7 +47,7 @@ function ChipSelect({ options, value, onChange, allowNone = true, noneLabel = "�
   const chipStyle = (selected) => ({
     borderColor: selected ? "var(--accent)" : "var(--line)",
     borderWidth: selected ? 1.5 : 1,
-    background: selected ? "var(--accent)" : "#fff",
+    background: selected ? "var(--accent)" : "var(--surface)",
     color: selected ? "#fff" : "var(--ink)",
   });
   return (
@@ -99,6 +99,9 @@ function ExercisePicker({ onAdd }) {
   const [groupIdx, setGroupIdx] = useState(0);
   const [exIdx, setExIdx] = useState(0);
   const [equipment, setEquipment] = useState("");
+  const [side, setSide] = useState("");
+  const [width, setWidth] = useState("");
+  const [grip, setGrip] = useState("");
   const [variant, setVariant] = useState("");
   const [sets, setSets] = useState(DEFAULT_SETS());
   const [timeHours, setTimeHours] = useState(0);
@@ -113,6 +116,7 @@ function ExercisePicker({ onAdd }) {
   const isCardio = group.name === "Кардио";
 
   const resetCardioDefaults = () => { setTimeHours(0); setTimeMinutes(20); setRepsValue(15); setDistanceValue(5); };
+  const resetDimensions = () => { setSide(""); setWidth(""); setGrip(""); setVariant(""); };
 
   const applyAssistedAutoDetect = (eq) => {
     setIsAssisted(eq === "Гравитрон" || eq === "Резинка");
@@ -123,7 +127,7 @@ function ExercisePicker({ onAdd }) {
     setGroupIdx(idx); setExIdx(0);
     const eq = g.name === "Кардио" ? (g.exercises[0].equipment[0] || "") : "";
     setEquipment(eq);
-    setVariant(""); resetCardioDefaults();
+    resetDimensions(); resetCardioDefaults();
     applyAssistedAutoDetect(eq);
     setPeriodizationEnabled(true);
   };
@@ -131,13 +135,15 @@ function ExercisePicker({ onAdd }) {
     setExIdx(idx);
     const eq = isCardio ? (group.exercises[idx].equipment[0] || "") : "";
     setEquipment(eq);
-    setVariant(""); resetCardioDefaults();
+    resetDimensions(); resetCardioDefaults();
     applyAssistedAutoDetect(eq);
     setPeriodizationEnabled(true);
   };
   const changeEquipment = (eq) => { setEquipment(eq); applyAssistedAutoDetect(eq); };
 
-  const composedName = [group.name, exercise.name, equipment || null, variant || null].filter(Boolean).join(" - ");
+  // Отображаемое название собирается из всех выбранных измерений по порядку.
+  const composedName = [group.name, exercise.name, equipment || null, side || null, width || null, grip || null, variant || null]
+    .filter(Boolean).join(" - ");
 
   const submit = () => {
     if (isCardio) {
@@ -145,10 +151,16 @@ function ExercisePicker({ onAdd }) {
       if (equipment === "По времени") value = formatCardioTime(timeHours, timeMinutes);
       else if (equipment === "По дистанции") value = `${distanceValue} км`;
       else if (equipment === "По повторениям") value = `${repsValue} ${pluralizeRu(repsValue, ["повторение", "повторения", "повторений"])}`;
-      onAdd({ id: uid(), name: composedName, sets: [{ reps: value, weight: "" }], isAssisted: false, periodizationEnabled: false });
+      onAdd({
+        id: uid(), name: composedName, sets: [{ reps: value, weight: "" }],
+        isAssisted: false, periodizationEnabled: false, baseName: exercise.name, equipment: null, side: null,
+      });
       resetCardioDefaults();
     } else {
-      onAdd({ id: uid(), name: composedName, sets, isAssisted, periodizationEnabled });
+      onAdd({
+        id: uid(), name: composedName, sets, isAssisted, periodizationEnabled,
+        baseName: exercise.name, equipment: equipment || null, side: side || null,
+      });
       setSets(DEFAULT_SETS());
     }
   };
@@ -172,14 +184,35 @@ function ExercisePicker({ onAdd }) {
 
       {exercise.equipment.length > 0 && (
         <div className="mb-3">
-          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>{isCardio ? "Как измеряем" : "Снаряд / вариант"}</label>
+          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>{isCardio ? "Как измеряем" : "Снаряд"}</label>
           <ChipSelect options={exercise.equipment} value={equipment} onChange={changeEquipment} allowNone={!isCardio} />
+        </div>
+      )}
+
+      {!isCardio && exercise.side.length > 0 && (
+        <div className="mb-3">
+          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Рабочая сторона</label>
+          <ChipSelect options={exercise.side} value={side} onChange={setSide} />
+        </div>
+      )}
+
+      {!isCardio && exercise.width.length > 0 && (
+        <div className="mb-3">
+          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Ширина хвата</label>
+          <ChipSelect options={exercise.width} value={width} onChange={setWidth} />
+        </div>
+      )}
+
+      {!isCardio && exercise.grip.length > 0 && (
+        <div className="mb-3">
+          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Тип хвата</label>
+          <ChipSelect options={exercise.grip} value={grip} onChange={setGrip} />
         </div>
       )}
 
       {!isCardio && exercise.variant.length > 0 && (
         <div className="mb-3">
-          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Сторона / хват</label>
+          <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Вариант</label>
           <ChipSelect options={exercise.variant} value={variant} onChange={setVariant} />
         </div>
       )}
@@ -330,7 +363,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   const totalExercises = exercises.length;
   const doneCount = Object.values(log).filter((l) => l.done).length;
   const isLast = exIndex === totalExercises - 1;
-  const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(exercise.name);
+  const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(exercise);
 
   // Тренажёр занят — переносим текущее упражнение на позицию сразу после
   // следующего, не отмечая выполненным. exIndex не меняем — после свапа
@@ -427,21 +460,50 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
           </div>
         ) : (
           <div className="space-y-2">
-            {exLog.sets.map((s, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <span className="text-xs w-4" style={{ color: "var(--ink-soft)" }}>{idx + 1}</span>
-                <input className="fp-input" style={{ width: 60, padding: "6px 8px" }} value={s.reps} onChange={(e) => updateSet(idx, { reps: e.target.value })} />
-                <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
-                <input className="fp-input" style={{ width: 68, padding: "6px 8px" }} value={s.weight} onChange={(e) => updateSet(idx, { weight: e.target.value })} placeholder="кг" />
-                <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
-                <span className="text-xs ml-auto mr-1" style={{ color: "var(--ink-soft)" }}>
-                  {exercise.sets[idx] ? `план ${exercise.sets[idx].reps}${exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}` : "доп. подход"}
-                </span>
-                <div className={`fp-checkbox ${s.done ? "done" : ""}`} style={{ borderRadius: 8, width: 24, height: 24 }} onClick={() => toggleSetDone(idx)}>
-                  {s.done && <CheckCircle2 size={13} color="#fff" />}
+            {exLog.sets.map((s, idx) => {
+              const activeIdx = exLog.sets.findIndex((x) => !x.done);
+              const isActive = idx === (activeIdx === -1 ? exLog.sets.length - 1 : activeIdx);
+              const isPast = s.done;
+
+              if (isPast) {
+                return (
+                  <div key={idx} className="flex items-center gap-2 py-1" style={{ opacity: 0.55 }}>
+                    <span className="text-xs w-4" style={{ color: "var(--ink-soft)" }}>{idx + 1}</span>
+                    <span className="text-sm" style={{ color: "var(--ink-soft)", textDecoration: "line-through" }}>
+                      {s.reps} × {s.weight || "—"} кг
+                    </span>
+                    <CheckCircle2 size={14} color="var(--accent-2)" style={{ marginLeft: "auto" }} />
+                  </div>
+                );
+              }
+
+              if (!isActive) {
+                return (
+                  <div key={idx} className="flex items-center gap-2 py-1" style={{ opacity: 0.4 }}>
+                    <span className="text-xs w-4" style={{ color: "var(--ink-soft)" }}>{idx + 1}</span>
+                    <span className="text-xs" style={{ color: "var(--ink-soft)" }}>
+                      {exercise.sets[idx] ? `план ${exercise.sets[idx].reps}${exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}` : "доп. подход"}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={idx} className="fp-card flex items-center gap-2 p-2" style={{ borderColor: "var(--accent)", borderWidth: 1.5, background: "var(--bg)" }}>
+                  <span className="text-xs w-4 font-bold" style={{ color: "var(--accent)" }}>{idx + 1}</span>
+                  <input className="fp-input" style={{ width: 60, padding: "6px 8px" }} value={s.reps} onChange={(e) => updateSet(idx, { reps: e.target.value })} />
+                  <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
+                  <input className="fp-input" style={{ width: 68, padding: "6px 8px" }} value={s.weight} onChange={(e) => updateSet(idx, { weight: e.target.value })} placeholder="кг" />
+                  <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
+                  <span className="text-xs ml-auto mr-1" style={{ color: "var(--ink-soft)" }}>
+                    {exercise.sets[idx] ? `план ${exercise.sets[idx].reps}${exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}` : "доп. подход"}
+                  </span>
+                  <div className="fp-checkbox" style={{ borderRadius: 8, width: 24, height: 24 }} onClick={() => toggleSetDone(idx)}>
+                    {s.done && <CheckCircle2 size={13} color="#fff" />}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <button onClick={addExtraSet} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
               <Plus size={12} /> Добавить подход
             </button>

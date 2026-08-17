@@ -27,7 +27,7 @@ function RatingPicker({ title, value, onChange, labelLow, labelHigh }) {
             style={{
               width: 26, height: 26, borderRadius: 8, border: "2px solid",
               borderColor: n <= value ? "var(--accent-2)" : "var(--line)",
-              background: n <= value ? "var(--accent-2)" : "#fff",
+              background: n <= value ? "var(--accent-2)" : "var(--surface)",
               color: n <= value ? "#fff" : "var(--ink-soft)",
               fontSize: 11, fontWeight: 700,
             }}

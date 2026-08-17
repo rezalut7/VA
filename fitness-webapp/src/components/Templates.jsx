@@ -121,11 +121,15 @@ function anchorFor(exerciseName, sessions) {
   return best;
 }
 
-function extractExerciseMeta(fullName) {
-  const parts = (fullName || "").split(" - ");
-  const base = parts.length >= 2 ? parts[1] : fullName;
+// Предпочитаем явные поля base_name/equipment/side (заполняются с этой
+// версии), но старые записи, созданные до миграции, ими не располагают —
+// для них используем разбор строки как запасной вариант.
+function resolveExerciseMeta(ex) {
+  if (ex.base_name) return { base: ex.base_name, equipment: ex.equipment, side: ex.side };
+  const parts = (ex.name || "").split(" - ");
+  const base = parts.length >= 2 ? parts[1] : ex.name;
   const equipment = parts[2] || null;
-  return { base, equipment };
+  return { base, equipment, side: null };
 }
 
 const WEEK_TYPE_OPTIONS = ["light", "medium", "heavy", "deload"];
@@ -134,7 +138,7 @@ export function PeriodizationPanel({ client }) {
   const [sessions, setSessions] = useState([]);
   const [workouts, setWorkouts] = useState([]);
   const [selectedWorkoutId, setSelectedWorkoutId] = useState("");
-  const [goal, setGoal] = useState("Гипертрофия");
+  const [goal, setGoal] = useState(client.onboarding?.goal || "Гипертрофия");
   const [weeks, setWeeks] = useState([{ id: 1, type: "light" }, { id: 2, type: "medium" }, { id: 3, type: "heavy" }, { id: 4, type: "deload" }]);
   const [bodyWeight, setBodyWeight] = useState("");
   const [loading, setLoading] = useState(true);
@@ -165,8 +169,8 @@ export function PeriodizationPanel({ client }) {
 
   const exerciseInfo = {}; // name -> { type, anchor }
   baseWorkout.workout_exercises.forEach((ex) => {
-    const { base, equipment } = extractExerciseMeta(ex.name);
-    const type = ex.periodization_enabled === false ? null : resolveExerciseType(base, equipment);
+    const { base, equipment, side } = resolveExerciseMeta(ex);
+    const type = ex.periodization_enabled === false ? null : resolveExerciseType(base, equipment, side);
     const anchor = type ? anchorFor(ex.name, relevantSessions) : null;
     exerciseInfo[ex.name] = { type, anchor };
   });
@@ -288,7 +292,7 @@ export function PeriodizationPanel({ client }) {
                         style={{
                           borderColor: week.type === t ? WEEK_TYPE_META[t].color : "var(--line)",
                           borderWidth: week.type === t ? 1.5 : 1,
-                          background: week.type === t ? WEEK_TYPE_META[t].color : "#fff",
+                          background: week.type === t ? WEEK_TYPE_META[t].color : "var(--surface)",
                           color: week.type === t ? "#fff" : "var(--ink)",
                         }}
                       >{WEEK_TYPE_META[t].label}</button>
