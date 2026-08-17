@@ -204,6 +204,9 @@ export async function createWorkout(clientId, title, items, periodizationWeek) {
     position: i,
     is_assisted: !!it.isAssisted,
     periodization_enabled: it.periodizationEnabled !== false,
+    base_name: it.baseName || null,
+    equipment: it.equipment || null,
+    side: it.side || null,
   }));
   const { error: exError } = await supabase.from("workout_exercises").insert(rows);
   if (exError) throw exError;
@@ -484,6 +487,7 @@ export async function createTemplate(trainerId, title, items) {
   const rows = items.map((it, i) => ({
     template_id: template.id, name: it.name, sets: it.sets, position: i,
     is_assisted: !!it.isAssisted, periodization_enabled: it.periodizationEnabled !== false,
+    base_name: it.baseName || null, equipment: it.equipment || null, side: it.side || null,
   }));
   const { error: exError } = await supabase.from("workout_template_exercises").insert(rows);
   if (exError) throw exError;
@@ -502,6 +506,7 @@ export async function assignTemplateToClient(clientId, template, titleOverride) 
     template.exercises.map((e) => ({
       name: e.name, sets: e.sets,
       isAssisted: e.is_assisted, periodizationEnabled: e.periodization_enabled,
+      baseName: e.base_name, equipment: e.equipment, side: e.side,
     }))
   );
 }
@@ -570,6 +575,7 @@ export async function createMicrocycle(trainerId, title, days) {
     const rows = day.items.map((it, j) => ({
       microcycle_workout_id: workout.id, name: it.name, sets: it.sets, position: j,
       is_assisted: !!it.isAssisted, periodization_enabled: it.periodizationEnabled !== false,
+      base_name: it.baseName || null, equipment: it.equipment || null, side: it.side || null,
     }));
     const { error: exError } = await supabase.from("microcycle_workout_exercises").insert(rows);
     if (exError) throw exError;
