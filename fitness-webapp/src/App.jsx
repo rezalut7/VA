@@ -22,6 +22,12 @@ import {
   fetchWorkoutsForClient, createWorkout, deleteWorkout, toggleExerciseDone, saveWorkoutSession,
 } from "./lib/api";
 
+const PALETTE_OPTIONS = [
+  { id: "default", label: "Оранжевая", swatch: "#FF4D1C" },
+  { id: "green", label: "Зелёная", swatch: "#5D9C33" },
+  { id: "pink", label: "Розовая", swatch: "#E5327A" },
+];
+
 const PLANS = [
   {
     id: "basic", name: "Дневник", price: 990, priceLabel: "990 ₽ / мес",
@@ -141,7 +147,7 @@ function LoginScreen({ onEnter }) {
   return (
     <div className="min-h-screen">
       <div className="flex flex-col items-center justify-center px-4 pt-16 pb-12 text-center">
-        <Chip style={{ background: "var(--accent)", color: "#fff", marginBottom: 18 }}>
+        <Chip style={{ background: "var(--accent)", color: "var(--accent-ink)", marginBottom: 18 }}>
           <Dumbbell size={13} /> ОНЛАЙН-ТРЕНИРОВКИ
         </Chip>
         <h1 className="fp-display text-4xl md:text-6xl font-bold mb-4 max-w-2xl">Форма. Питание. Прогресс.</h1>
@@ -522,7 +528,7 @@ function OnboardingForm({ client, onDone }) {
   );
 }
 
-function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpdated }) {
+function ClientHome({ client, onLogout, authUserId, theme, setTheme, palette, setPalette, onClientUpdated }) {
   const [tab, setTab] = useState("today");
   const [workouts, setWorkouts] = useState([]);
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
@@ -757,7 +763,7 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
 
             <div className="fp-card p-4 mb-3">
               <div className="text-xs mb-2 font-semibold" style={{ color: "var(--ink-soft)" }}>ОФОРМЛЕНИЕ</div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 mb-3">
                 <button
                   onClick={() => setTheme("light")}
                   className="fp-card px-3 py-2 text-sm flex items-center justify-center gap-1.5"
@@ -768,6 +774,20 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
                   className="fp-card px-3 py-2 text-sm flex items-center justify-center gap-1.5"
                   style={{ borderColor: theme === "dark" ? "var(--accent)" : "var(--line)", borderWidth: theme === "dark" ? 1.5 : 1 }}
                 >🌙 Тёмная</button>
+              </div>
+              <div className="text-xs mb-1.5" style={{ color: "var(--ink-soft)" }}>Цветовая палитра</div>
+              <div className="grid grid-cols-3 gap-2">
+                {PALETTE_OPTIONS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setPalette(p.id)}
+                    className="fp-card px-2 py-2 text-xs flex flex-col items-center gap-1.5"
+                    style={{ borderColor: palette === p.id ? p.swatch : "var(--line)", borderWidth: palette === p.id ? 1.5 : 1 }}
+                  >
+                    <span style={{ width: 18, height: 18, borderRadius: "50%", background: p.swatch, display: "block" }} />
+                    {p.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -953,7 +973,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
   );
 }
 
-function TrainerHome({ trainer, clients, onLogout, authUserId, theme, setTheme, onTrainerUpdated }) {
+function TrainerHome({ trainer, clients, onLogout, authUserId, theme, setTheme, palette, setPalette, onTrainerUpdated }) {
   const [tab, setTab] = useState("overview");
   const [selectedClient, setSelectedClient] = useState(null);
   const [selectedClientTab, setSelectedClientTab] = useState("workouts");
@@ -1134,7 +1154,7 @@ function TrainerHome({ trainer, clients, onLogout, authUserId, theme, setTheme, 
           <div className="px-4">
             <div className="fp-card p-4 mb-3">
               <div className="text-xs mb-2 font-semibold" style={{ color: "var(--ink-soft)" }}>ОФОРМЛЕНИЕ</div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 mb-3">
                 <button
                   onClick={() => setTheme("light")}
                   className="fp-card px-3 py-2 text-sm flex items-center justify-center gap-1.5"
@@ -1145,6 +1165,20 @@ function TrainerHome({ trainer, clients, onLogout, authUserId, theme, setTheme, 
                   className="fp-card px-3 py-2 text-sm flex items-center justify-center gap-1.5"
                   style={{ borderColor: theme === "dark" ? "var(--accent)" : "var(--line)", borderWidth: theme === "dark" ? 1.5 : 1 }}
                 >🌙 Тёмная</button>
+              </div>
+              <div className="text-xs mb-1.5" style={{ color: "var(--ink-soft)" }}>Цветовая палитра</div>
+              <div className="grid grid-cols-3 gap-2">
+                {PALETTE_OPTIONS.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setPalette(p.id)}
+                    className="fp-card px-2 py-2 text-xs flex flex-col items-center gap-1.5"
+                    style={{ borderColor: palette === p.id ? p.swatch : "var(--line)", borderWidth: palette === p.id ? 1.5 : 1 }}
+                  >
+                    <span style={{ width: 18, height: 18, borderRadius: "50%", background: p.swatch, display: "block" }} />
+                    {p.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -1192,11 +1226,18 @@ export default function App() {
   const [trainer, setTrainer] = useState(null);
   const [client, setClient] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem("fp-theme") || "dark");
+  const [palette, setPalette] = useState(() => localStorage.getItem("fp-palette") || "default");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("fp-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (palette === "default") document.documentElement.removeAttribute("data-palette");
+    else document.documentElement.setAttribute("data-palette", palette);
+    localStorage.setItem("fp-palette", palette);
+  }, [palette]);
 
   const resolveRole = async (currentSession) => {
     if (!currentSession) { setTrainer(null); setClient(null); setLoading(false); return; }
@@ -1233,12 +1274,12 @@ export default function App() {
     return <LoginScreen onEnter={() => setScreen("entry")} />;
   }
 
-  if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} onTrainerUpdated={(updated) => setTrainer((prev) => ({ ...prev, ...updated }))} />;
+  if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} palette={palette} setPalette={setPalette} onTrainerUpdated={(updated) => setTrainer((prev) => ({ ...prev, ...updated }))} />;
 
   if (client) {
     if (!client.subscription_active) return <SubscribeGate client={client} onPaid={setClient} />;
     if (!client.onboarding_complete) return <OnboardingForm client={client} onDone={setClient} />;
-    return <ClientHome client={client} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} onClientUpdated={setClient} />;
+    return <ClientHome client={client} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} palette={palette} setPalette={setPalette} onClientUpdated={setClient} />;
   }
 
   return (

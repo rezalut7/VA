@@ -33,6 +33,58 @@
   --danger: #FF6B5C;
 }
 
+/* Палитра "Зелёная" — тёмно-зелёные и салатовые тона */
+[data-palette="green"] {
+  --bg: #F1F6EC;
+  --surface: #FFFFFF;
+  --ink: #16281A;
+  --ink-soft: #5C7263;
+  --accent: #5D9C33;
+  --accent-ink: #FFFFFF;
+  --accent-2: #558B2F;
+  --line: #DCE7D2;
+  --danger: #D6432E;
+  --solid-dark: #1B3320;
+}
+
+[data-palette="green"][data-theme="dark"] {
+  --bg: #0F1710;
+  --surface: #17251A;
+  --ink: #EAF3E7;
+  --ink-soft: #90A896;
+  --accent: #8BC34A;
+  --accent-ink: #0F1710;
+  --accent-2: #6FA83A;
+  --line: #24352A;
+  --danger: #FF6B5C;
+}
+
+/* Палитра "Розовая" — розово-фиолетовые тона */
+[data-palette="pink"] {
+  --bg: #FBF3F8;
+  --surface: #FFFFFF;
+  --ink: #2A1830;
+  --ink-soft: #7A6580;
+  --accent: #E5327A;
+  --accent-ink: #FFFFFF;
+  --accent-2: #9C6ADE;
+  --line: #EAD9E6;
+  --danger: #D6432E;
+  --solid-dark: #2A1830;
+}
+
+[data-palette="pink"][data-theme="dark"] {
+  --bg: #170F1C;
+  --surface: #221629;
+  --ink: #F5EAF2;
+  --ink-soft: #A78FA8;
+  --accent: #F0529C;
+  --accent-ink: #170F1C;
+  --accent-2: #A873E0;
+  --line: #322538;
+  --danger: #FF6B5C;
+}
+
 body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
