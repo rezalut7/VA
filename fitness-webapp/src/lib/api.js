@@ -189,10 +189,10 @@ export async function fetchWorkoutsForClient(clientId) {
   }));
 }
 
-export async function createWorkout(clientId, title, items, periodizationWeek) {
+export async function createWorkout(clientId, title, items, periodizationWeek, createdBy = "trainer") {
   const { data: workout, error } = await supabase
     .from("workouts")
-    .insert({ client_id: clientId, title, periodization_week: periodizationWeek || null })
+    .insert({ client_id: clientId, title, periodization_week: periodizationWeek || null, created_by: createdBy })
     .select()
     .single();
   if (error) throw error;
@@ -235,6 +235,7 @@ export async function saveWorkoutSession(clientId, payload) {
     duration_sec: payload.durationSec,
     exercises: payload.exercises,
     note: payload.note || null,
+    rating: payload.rating || null,
   });
   if (error) throw error;
 
@@ -325,19 +326,27 @@ export async function fetchChatMessages(clientId) {
 export async function sendChatMessage(clientId, fromName, senderRole, text, attachment) {
   const { error } = await supabase.from("chat_messages").insert({
     client_id: clientId, from_name: fromName, sender_role: senderRole, text,
-    attachment_url: attachment?.url || null, attachment_type: attachment?.type || null,
+    attachment_url: attachment?.path || null, attachment_type: attachment?.type || null,
   });
   if (error) throw error;
   await touchClient(clientId);
 }
 
-export async function uploadChatAttachment(file) {
+export async function uploadChatAttachment(clientId, file) {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${Date.now()}-${safeName}`;
+  const path = `${clientId}/${Date.now()}-${safeName}`;
   const { error } = await supabase.storage.from("chat-attachments").upload(path, file);
   if (error) throw error;
-  const { data } = supabase.storage.from("chat-attachments").getPublicUrl(path);
-  return { url: data.publicUrl, type: file.type.startsWith("video") ? "video" : "image" };
+  return { path, type: file.type.startsWith("video") ? "video" : "image" };
+}
+
+// Приватные бакеты — прямой URL не отдаёт файл никому постороннему. Подписанная
+// ссылка выдаётся только тем, кому разрешает RLS (клиент-владелец или его тренер),
+// действует ограниченное время.
+export async function getSignedFileUrl(bucket, path, expiresIn = 3600) {
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 // Живая подписка на новые сообщения в чате конкретного клиента.
@@ -449,8 +458,7 @@ export async function uploadCheckinPhoto(clientId, file) {
   const path = `${clientId}/${Date.now()}-${file.name}`;
   const { error } = await supabase.storage.from("checkin-photos").upload(path, file);
   if (error) throw error;
-  const { data } = supabase.storage.from("checkin-photos").getPublicUrl(path);
-  return data.publicUrl;
+  return path;
 }
 
 /* ------------------------------- PROGRESS ------------------------------- */
