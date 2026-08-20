@@ -22,10 +22,27 @@ function dateLabel(iso) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 }
 
-// Определяем открытую клавиатуру просто по фокусу поля ввода — надёжнее
-// расчётов по visualViewport, которые конфликтуют с мета-тегом
-// interactive-widget=resizes-content (он уже сам двигает видимую область,
-// поэтому вычислять размер клавиатуры вручную не нужно и даже вредно).
+// Точная высота клавиатуры = разница между полной высотой окна (не меняется,
+// т.к. в index.html убран interactive-widget=resizes-content — поэтому нижнее
+// меню приложения и не двигается) и видимой visualViewport (которая всегда
+// корректно сжимается под клавиатуру). Поле ввода следует именно за ней.
+function useKeyboardHeight() {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      const kb = window.innerHeight - vv.height - vv.offsetTop;
+      setHeight(Math.max(0, Math.round(kb)));
+    };
+    vv.addEventListener("resize", handler);
+    vv.addEventListener("scroll", handler);
+    handler();
+    return () => { vv.removeEventListener("resize", handler); vv.removeEventListener("scroll", handler); };
+  }, []);
+  return height;
+}
+
 function ChatAttachment({ path, type }) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
@@ -73,7 +90,7 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
-  const [inputFocused, setInputFocused] = useState(false);
+  const keyboardHeight = useKeyboardHeight();
 
   useEffect(() => {
     setLoading(true);
@@ -132,13 +149,13 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
 
   if (loading) return <p className="text-sm px-4" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
 
-  const inputBottom = inputFocused ? 0 : NAV_REST_BOTTOM;
+  const inputBottom = keyboardHeight > 40 ? keyboardHeight : NAV_REST_BOTTOM;
 
   return (
     <div>
       <div
         className="px-4 space-y-1 fp-scroll"
-        style={{ paddingBottom: `calc(${inputFocused ? "0px" : NAV_REST_BOTTOM} + 76px)` }}
+        style={{ paddingBottom: `calc(${keyboardHeight > 40 ? `${keyboardHeight}px` : NAV_REST_BOTTOM} + 76px)` }}
       >
         {messages.length === 0 && (
           <p className="text-sm text-center mt-8" style={{ color: "var(--ink-soft)" }}>Сообщений пока нет — напишите первым.</p>
@@ -199,7 +216,7 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
       <div
         className="flex items-center gap-2 px-4 py-3"
         style={{
-          position: "fixed", left: 0, right: 0, bottom: inputBottom, zIndex: 45,
+          position: "fixed", left: 0, right: 0, bottom: inputBottom, zIndex: 45, transition: "bottom 0.12s ease",
           background: "var(--surface)", borderTop: "1px solid var(--line)",
         }}
       >
@@ -219,9 +236,6 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
           value={text}
           disabled={uploading}
           onChange={(e) => setText(e.target.value)}
-          onFocus={() => setInputFocused(true)}
-          onBlur={() => setInputFocused(false)}
-          onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
         />
         <button type="button"
           className="flex items-center justify-center flex-shrink-0"

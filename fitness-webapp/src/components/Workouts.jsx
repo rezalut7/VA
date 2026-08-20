@@ -395,7 +395,7 @@ function buildSteps(exercises) {
       while (j < exercises.length && exercises[j].circuit_id === ex.circuit_id) { group.push(exercises[j]); j++; }
       const rounds = ex.circuit_rounds || 1;
       for (let r = 0; r < rounds; r++) {
-        steps.push({ key: `${ex.circuit_id}-r${r}`, isCircuit: true, exercises: group, setIndex: r, roundNumber: r + 1, totalRounds: rounds });
+        group.forEach((g) => steps.push({ key: `${g.id}-r${r}`, isCircuit: true, exercise: g, setIndex: r, roundNumber: r + 1, totalRounds: rounds, circuitPartners: group }));
       }
       i = j;
     } else {
@@ -444,19 +444,18 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   const steps = buildSteps(exercises);
   const currentStep = steps[Math.min(exIndex, steps.length - 1)];
   const isCircuitStep = currentStep.isCircuit;
-  const exercise = isCircuitStep ? null : currentStep.exercise;
+  const exercise = currentStep.exercise;
   const isCardio = !isCircuitStep && exercise.name.startsWith("Кардио");
-  const exLog = isCircuitStep ? null : log[exercise.id];
+  const exLog = log[exercise.id];
   const totalSteps = steps.length;
   const isStepDone = (step) => {
-    if (step.isCircuit) return step.exercises.every((ex) => !!log[ex.id]?.sets[step.setIndex]?.done);
+    if (step.isCircuit) return !!log[step.exercise.id]?.sets[step.setIndex]?.done;
     const l = log[step.exercise.id];
     return l ? l.done : false;
   };
   const doneStepsCount = steps.filter(isStepDone).length;
   const isLast = exIndex === totalSteps - 1;
-  const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(isCircuitStep ? null : exercise);
-  const circuitRoundComplete = isCircuitStep && currentStep.exercises.every((ex) => log[ex.id]?.sets[currentStep.setIndex]?.done);
+  const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(exercise);
 
   // Тренажёр занят — переносим текущее упражнение на позицию сразу после
   // следующего, не отмечая выполненным. Доступно только вне круга (внутри
@@ -530,38 +529,31 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
       <div className="fp-bar-track mb-3"><div className="fp-bar-fill" style={{ width: `${(doneStepsCount / totalSteps) * 100}%`, background: "var(--accent-2)" }} /></div>
 
       <div className="fp-card p-4 mb-3 flex-1">
+        <div className="fp-display text-lg font-semibold mb-2.5">{exercise.name}</div>
+
+        {isCircuitStep && (
+          <div className="fp-card p-2.5 mb-3" style={{ background: "var(--bg)", borderColor: "var(--accent)", borderWidth: 1.5 }}>
+            <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Круг {currentStep.roundNumber} из {currentStep.totalRounds}</span>
+            <div className="text-xs mt-0.5" style={{ color: "var(--ink-soft)" }}>
+              {currentStep.circuitPartners.map((p) => p.name).join(" → ")}
+            </div>
+          </div>
+        )}
+
+        <ExerciseDescriptionBlock detail={exerciseDetail} loading={exerciseDetailLoading} />
+
         {isCircuitStep ? (
-          <>
-            <div className="fp-display text-lg font-semibold mb-1">Круг {currentStep.roundNumber} из {currentStep.totalRounds}</div>
-            <div className="text-xs mb-3" style={{ color: "var(--ink-soft)" }}>
-              {currentStep.exercises.map((e) => e.name).join(" → ")}
+          <div className="fp-card flex items-center gap-2 p-3" style={{ borderColor: "var(--accent)", borderWidth: 1.5, background: "var(--bg)" }}>
+            <input className="fp-input" style={{ width: 70, padding: "6px 8px" }} value={exLog.sets[currentStep.setIndex].reps} onChange={(e) => updateSet(exercise.id, currentStep.setIndex, { reps: e.target.value })} />
+            <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
+            <input className="fp-input" style={{ width: 80, padding: "6px 8px" }} value={exLog.sets[currentStep.setIndex].weight} onChange={(e) => updateSet(exercise.id, currentStep.setIndex, { weight: e.target.value })} placeholder="кг" />
+            <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
+            <div className="fp-checkbox" style={{ marginLeft: "auto", borderRadius: 8, width: 34, height: 34 }} onClick={() => toggleSetDone(exercise.id, currentStep.setIndex)}>
+              {exLog.sets[currentStep.setIndex].done && <CheckCircle2 size={19} color="#fff" />}
             </div>
-            <div className="space-y-3">
-              {currentStep.exercises.map((ex) => {
-                const set = log[ex.id].sets[currentStep.setIndex];
-                return (
-                  <div key={ex.id} className="fp-card p-3" style={{ borderColor: set.done ? "var(--accent-2)" : "var(--line)", borderWidth: 1.5, background: "var(--bg)" }}>
-                    <div className="text-sm font-semibold mb-2">{ex.name}</div>
-                    <div className="flex items-center gap-2">
-                      <input className="fp-input" style={{ width: 70, padding: "6px 8px" }} value={set.reps} onChange={(e) => updateSet(ex.id, currentStep.setIndex, { reps: e.target.value })} />
-                      <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
-                      <input className="fp-input" style={{ width: 80, padding: "6px 8px" }} value={set.weight} onChange={(e) => updateSet(ex.id, currentStep.setIndex, { weight: e.target.value })} placeholder="кг" />
-                      <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
-                      <div className="fp-checkbox" style={{ marginLeft: "auto", borderRadius: 8, width: 34, height: 34 }} onClick={() => toggleSetDone(ex.id, currentStep.setIndex)}>
-                        {set.done && <CheckCircle2 size={19} color="#fff" />}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+          </div>
         ) : (
           <>
-            <div className="fp-display text-lg font-semibold mb-2.5">{exercise.name}</div>
-
-            <ExerciseDescriptionBlock detail={exerciseDetail} loading={exerciseDetailLoading} />
-
             {isCardio ? (
           <div>
             <div className="fp-card p-3 mb-3 text-center" style={{ background: "var(--bg)" }}>
@@ -636,22 +628,22 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
             </button>
           </div>
         )}
-
-            <div className="mt-3">
-              <input
-                className="fp-input"
-                style={{ fontSize: 12, padding: "7px 10px" }}
-                placeholder="Комментарий к упражнению (необязательно)"
-                value={exerciseNotes[exercise.id] || ""}
-                onChange={(e) => setExerciseNotes((prev) => ({ ...prev, [exercise.id]: e.target.value }))}
-              />
-            </div>
-
-            <div className="mt-3">
-              <ExerciseVideoBlock detail={exerciseDetail} loading={exerciseDetailLoading} title={exercise.name} />
-            </div>
           </>
         )}
+
+        <div className="mt-3">
+          <input
+            className="fp-input"
+            style={{ fontSize: 12, padding: "7px 10px" }}
+            placeholder="Комментарий к упражнению (необязательно)"
+            value={exerciseNotes[exercise.id] || ""}
+            onChange={(e) => setExerciseNotes((prev) => ({ ...prev, [exercise.id]: e.target.value }))}
+          />
+        </div>
+
+        <div className="mt-3">
+          <ExerciseVideoBlock detail={exerciseDetail} loading={exerciseDetailLoading} title={exercise.name} />
+        </div>
 
         {rest.active && !isCardio && (
           <div className="fp-card p-2.5 mt-3 flex items-center justify-between" style={{ background: "var(--bg)" }}>
@@ -689,9 +681,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
             <Flag size={14} /> {finishing ? "Сохраняем…" : "Завершить"}
           </button>
         ) : (
-          <button type="button" className="fp-btn fp-btn-accent flex-1 py-2.5 disabled:opacity-40" disabled={isCircuitStep && !circuitRoundComplete} onClick={() => setExIndex((i) => Math.min(totalSteps - 1, i + 1))}>
-            {isCircuitStep ? `Завершить круг → Круг ${currentStep.roundNumber + 1}` : "Далее →"}
-          </button>
+          <button type="button" className="fp-btn fp-btn-accent flex-1 py-2.5" onClick={() => setExIndex((i) => Math.min(totalSteps - 1, i + 1))}>Далее →</button>
         )}
       </div>
 
