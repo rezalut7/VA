@@ -3,10 +3,21 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Camera, ClipboardCheck, Sparkles, Lightbulb, TrendingUp, TrendingDown, Minus, ImageOff } from "lucide-react";
 import {
   fetchCheckins, addCheckin, uploadCheckinPhoto,
-  fetchProgress, fetchWorkoutsForClient, fetchNutritionLoggingDays, completeOnboarding,
+  fetchProgress, fetchWorkoutsForClient, fetchNutritionLoggingDays, completeOnboarding, getSignedFileUrl,
 } from "../lib/api";
 import { ExerciseProgressSection } from "./ExerciseProgress";
 import { AchievementsSection } from "./Achievements";
+
+function CheckinPhoto({ path }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getSignedFileUrl("checkin-photos", path).then((u) => { if (!cancelled) setUrl(u); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [path]);
+  if (!url) return <div style={{ width: 64, height: 64, borderRadius: 10, background: "var(--bg)", flexShrink: 0 }} />;
+  return <img src={url} alt="фото прогресса" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, flexShrink: 0 }} />;
+}
 
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function humanDate(iso) {
@@ -164,7 +175,7 @@ function CheckinHistory({ checkins }) {
             </div>
             <div className="flex gap-3">
               {c.photo_url ? (
-                <img src={c.photo_url} alt="фото прогресса" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10, flexShrink: 0 }} />
+                <CheckinPhoto path={c.photo_url} />
               ) : (
                 <div className="flex items-center justify-center" style={{ width: 64, height: 64, borderRadius: 10, background: "var(--bg)", flexShrink: 0 }}>
                   <ImageOff size={16} color="var(--ink-soft)" />

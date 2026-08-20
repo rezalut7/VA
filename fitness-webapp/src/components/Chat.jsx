@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Send, MessageCircle, Paperclip, X } from "lucide-react";
 import {
   fetchChatMessages, sendChatMessage, subscribeToChatMessages,
-  markChatRead, fetchTrainerInbox, uploadChatAttachment,
+  markChatRead, fetchTrainerInbox, uploadChatAttachment, getSignedFileUrl,
   fetchReactionsForMessages, subscribeToChatReactions, toggleChatReaction,
 } from "../lib/api";
 
@@ -22,21 +22,38 @@ function dateLabel(iso) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 }
 
-// Отслеживаем реальную видимую высоту вьюпорта — на iOS клавиатура не
-// сжимает окно, а просто перекрывает его, поэтому обычный fixed bottom:0
-// прячется под клавиатурой. visualViewport даёт настоящую видимую высоту.
-function useKeyboardOffset() {
-  const [offset, setOffset] = useState(0);
+// С мета-тегом interactive-widget=resizes-content (index.html) браузер сам
+// правильно уменьшает видимую область при открытии клавиатуры — значит
+// обычный position:fixed; bottom:0 уже "приклеен" к клавиатуре без ручных
+// расчётов. Нужно только знать, открыта ли клавиатура сейчас, чтобы решить,
+// прижимать поле к самому низу (0) или оставлять над нижним меню (в покое).
+function useKeyboardOpen() {
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const handler = () => setOffset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    const handler = () => setOpen(window.innerHeight - vv.height > 80);
     vv.addEventListener("resize", handler);
-    vv.addEventListener("scroll", handler);
     handler();
-    return () => { vv.removeEventListener("resize", handler); vv.removeEventListener("scroll", handler); };
+    return () => vv.removeEventListener("resize", handler);
   }, []);
-  return offset;
+  return open;
+}
+
+function ChatAttachment({ path, type }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    getSignedFileUrl("chat-attachments", path).then((u) => { if (!cancelled) setUrl(u); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [path]);
+
+  if (!url) return <div style={{ width: 180, height: 120, borderRadius: 10, background: "rgba(0,0,0,0.08)" }} />;
+  return type === "video" ? (
+    <video src={url} controls playsInline preload="metadata" style={{ width: "100%", maxWidth: 220, borderRadius: 10 }} />
+  ) : (
+    <img src={url} alt="" style={{ width: "100%", maxWidth: 220, borderRadius: 10 }} />
+  );
 }
 
 function ReactionBar({ messageId, reactions, authUserId, onToggle }) {
@@ -70,7 +87,7 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
-  const keyboardOffset = useKeyboardOffset();
+  const keyboardOpen = useKeyboardOpen();
 
   useEffect(() => {
     setLoading(true);
@@ -112,7 +129,7 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
     if (!file) return;
     setUploading(true);
     try {
-      const attachment = await uploadChatAttachment(file);
+      const attachment = await uploadChatAttachment(clientId, file);
       await sendChatMessage(clientId, currentSender, senderRole, text.trim() || null, attachment);
       setText("");
     } catch (err) {
@@ -129,13 +146,13 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
 
   if (loading) return <p className="text-sm px-4" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
 
-  const inputBottom = keyboardOffset > 0 ? keyboardOffset : NAV_REST_BOTTOM;
+  const inputBottom = keyboardOpen ? 0 : NAV_REST_BOTTOM;
 
   return (
     <div>
       <div
         className="px-4 space-y-1 fp-scroll"
-        style={{ paddingBottom: `calc(${keyboardOffset > 0 ? `${keyboardOffset}px` : NAV_REST_BOTTOM} + 76px)` }}
+        style={{ paddingBottom: `calc(${keyboardOpen ? "0px" : NAV_REST_BOTTOM} + 76px)` }}
       >
         {messages.length === 0 && (
           <p className="text-sm text-center mt-8" style={{ color: "var(--ink-soft)" }}>Сообщений пока нет — напишите первым.</p>
@@ -169,11 +186,9 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
                 >
                   {!mine && <div className="text-xs font-semibold mb-0.5" style={{ opacity: 0.6 }}>{m.from_name}</div>}
                   {m.attachment_url && (
-                    m.attachment_type === "video" ? (
-                      <video src={m.attachment_url} controls playsInline preload="metadata" style={{ width: "100%", maxWidth: 220, borderRadius: 10, marginBottom: m.text ? 6 : 0 }} />
-                    ) : (
-                      <img src={m.attachment_url} alt="" style={{ width: "100%", maxWidth: 220, borderRadius: 10, marginBottom: m.text ? 6 : 0 }} />
-                    )
+                    <div style={{ marginBottom: m.text ? 6 : 0 }}>
+                      <ChatAttachment path={m.attachment_url} type={m.attachment_type} />
+                    </div>
                   )}
                   {m.text && <div className="text-sm" style={{ lineHeight: 1.35 }}>{m.text}</div>}
                   <div className="text-[10px] mt-1" style={{ opacity: 0.6, textAlign: "right" }}>{formatTime(m.created_at)}</div>

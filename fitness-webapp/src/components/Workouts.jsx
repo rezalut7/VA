@@ -400,6 +400,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
       return { ...prev, [exercise.id]: { sets: nextSets, done: false } };
     });
   };
+  const [rating, setRating] = useState(0);
   const cardioIsTimed = isCardio && /мин|час/.test(exercise.sets[0].reps);
 
   const finish = async () => {
@@ -411,7 +412,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
     await onFinish({
       workoutId: workout.id, title: workout.title, startedAt,
       finishedAt: Date.now(), durationSec: elapsedSec, exercises: exercisesPayload,
-      note: sessionNote.trim() || null,
+      note: sessionNote.trim() || null, rating: rating || null,
     });
   };
 
@@ -498,8 +499,8 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
                   <span className="text-xs ml-auto mr-1" style={{ color: "var(--ink-soft)" }}>
                     {exercise.sets[idx] ? `план ${exercise.sets[idx].reps}${exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}` : "доп. подход"}
                   </span>
-                  <div className="fp-checkbox" style={{ borderRadius: 8, width: 24, height: 24 }} onClick={() => toggleSetDone(idx)}>
-                    {s.done && <CheckCircle2 size={13} color="#fff" />}
+                  <div className="fp-checkbox" style={{ borderRadius: 8, width: 34, height: 34 }} onClick={() => toggleSetDone(idx)}>
+                    {s.done && <CheckCircle2 size={19} color="#fff" />}
                   </div>
                 </div>
               );
@@ -529,6 +530,15 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
 
         {isLast && (
           <div className="mt-2">
+            <label className="text-xs mb-1.5 block" style={{ color: "var(--ink-soft)" }}>Как оцените тренировку?</label>
+            <div className="flex gap-1.5 mb-3">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n} type="button" onClick={() => setRating(n)}
+                  style={{ fontSize: 26, lineHeight: 1, color: n <= rating ? "var(--accent)" : "var(--line)" }}
+                >★</button>
+              ))}
+            </div>
             <input
               className="fp-input"
               style={{ fontSize: 12, padding: "7px 10px" }}

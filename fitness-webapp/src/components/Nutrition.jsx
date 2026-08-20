@@ -12,7 +12,7 @@ function CollapsibleCalculator({ client, onProfileSaved, onGoalsApplied }) {
   const goals = client.goals;
   return (
     <div className="mb-4">
-      <button
+      <button type="button"
         onClick={() => setOpen((o) => !o)}
         className="fp-card w-full p-3 flex items-center justify-between text-left"
       >
@@ -98,7 +98,7 @@ function DateNav({ date, onChange }) {
   const shift = (delta) => onChange(shiftDateStr(date, delta));
   return (
     <div className="flex items-center justify-between mb-4">
-      <button onClick={() => shift(-1)} className="fp-btn fp-btn-outline p-2"><ChevronLeft size={16} /></button>
+      <button type="button" onClick={() => shift(-1)} className="fp-btn fp-btn-outline p-2"><ChevronLeft size={16} /></button>
       <label className="flex items-center gap-1.5 text-sm font-semibold capitalize" style={{ cursor: "pointer", position: "relative" }}>
         <Calendar size={14} color="var(--ink-soft)" />
         {isToday ? "Сегодня" : label}
@@ -108,7 +108,7 @@ function DateNav({ date, onChange }) {
           style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
         />
       </label>
-      <button onClick={() => shift(1)} disabled={isToday} className="fp-btn fp-btn-outline p-2 disabled:opacity-30"><ChevronRight size={16} /></button>
+      <button type="button" onClick={() => shift(1)} disabled={isToday} className="fp-btn fp-btn-outline p-2 disabled:opacity-30"><ChevronRight size={16} /></button>
     </div>
   );
 }
@@ -200,16 +200,16 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
     <div className="fp-card p-4 mb-3" style={{ background: "var(--bg)" }}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-semibold" style={{ color: "var(--ink-soft)" }}>ДОБАВИТЬ ПРОДУКТ</span>
-        <button onClick={onCancel}><X size={15} color="var(--ink-soft)" /></button>
+        <button type="button" onClick={onCancel}><X size={15} color="var(--ink-soft)" /></button>
       </div>
 
       <div className="flex gap-2 mb-3">
-        <button
+        <button type="button"
           className="fp-card px-2.5 py-1.5 text-xs flex-1"
           style={{ borderColor: mode === "search" ? "var(--accent)" : "var(--line)", borderWidth: mode === "search" ? 1.5 : 1 }}
           onClick={() => setMode("search")}
         >Поиск в базе</button>
-        <button
+        <button type="button"
           className="fp-card px-2.5 py-1.5 text-xs flex-1 flex items-center justify-center gap-1"
           style={{ borderColor: mode === "quick" ? "var(--accent)" : "var(--line)", borderWidth: mode === "quick" ? 1.5 : 1 }}
           onClick={() => setMode("quick")}
@@ -223,7 +223,7 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
           <div className="flex items-center gap-2">
             <input className="fp-input" style={{ width: 100 }} type="number" value={quickKcal} onChange={(e) => setQuickKcal(e.target.value)} placeholder="ккал" />
             <span className="text-xs" style={{ color: "var(--ink-soft)" }}>ккал (без БЖУ)</span>
-            <button className="fp-btn fp-btn-accent px-4 py-2 text-xs ml-auto disabled:opacity-40" disabled={!quickName.trim() || !quickKcal} onClick={submitQuick}>{submitLabel}</button>
+            <button type="button" className="fp-btn fp-btn-accent px-4 py-2 text-xs ml-auto disabled:opacity-40" disabled={!quickName.trim() || !quickKcal} onClick={submitQuick}>{submitLabel}</button>
           </div>
         </div>
       ) : !selectedFood ? (
@@ -236,7 +236,7 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
           {!searching && results.length > 0 && (
             <div className="fp-card fp-scroll" style={{ maxHeight: 180, overflowY: "auto" }}>
               {results.map((f) => (
-                <button key={f.id} onClick={() => pickFood(f)} className="w-full text-left px-3 py-2 text-sm border-b last:border-0" style={{ borderColor: "var(--line)" }}>
+                <button type="button" key={f.id} onClick={() => pickFood(f)} className="w-full text-left px-3 py-2 text-sm border-b last:border-0" style={{ borderColor: "var(--line)" }}>
                   {f.name}
                 </button>
               ))}
@@ -247,25 +247,25 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
         <div>
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-semibold">{selectedFood.name}</span>
-            <button onClick={clearSelection}><X size={16} color="var(--ink-soft)" /></button>
+            <button type="button" onClick={clearSelection}><X size={16} color="var(--ink-soft)" /></button>
           </div>
           {loadingDetails ? (
             <p className="text-xs" style={{ color: "var(--ink-soft)" }}>Загружаем порции…</p>
           ) : selectedFood.servings.length === 0 ? (
             <div>
               <p className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>Нет данных о КБЖУ для этого продукта — попробуйте другой.</p>
-              <button className="text-xs" style={{ color: "var(--accent)" }} onClick={clearSelection}>← Искать заново</button>
+              <button type="button" className="text-xs" style={{ color: "var(--accent)" }} onClick={clearSelection}>← Искать заново</button>
             </div>
           ) : (
             <>
               {base100 && (
                 <div className="flex gap-2 mb-3">
-                  <button
+                  <button type="button"
                     className="fp-card px-2.5 py-1.5 text-xs flex-1"
                     style={{ borderColor: !gramsMode ? "var(--accent)" : "var(--line)", borderWidth: !gramsMode ? 1.5 : 1 }}
                     onClick={() => setGramsMode(false)}
                   >Порция</button>
-                  <button
+                  <button type="button"
                     className="fp-card px-2.5 py-1.5 text-xs flex-1"
                     style={{ borderColor: gramsMode ? "var(--accent)" : "var(--line)", borderWidth: gramsMode ? 1.5 : 1 }}
                     onClick={() => setGramsMode(true)}
@@ -280,7 +280,7 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
                   <span className="text-xs" style={{ color: "var(--ink-soft)" }}>
                     ≈ {Math.round((base100.kcal * (Number(grams) || 0)) / 100)} ккал
                   </span>
-                  <button className="fp-btn fp-btn-accent px-4 py-2 text-xs ml-auto" onClick={submit}>{submitLabel}</button>
+                  <button type="button" className="fp-btn fp-btn-accent px-4 py-2 text-xs ml-auto" onClick={submit}>{submitLabel}</button>
                 </div>
               ) : (
                 <>
@@ -293,7 +293,7 @@ function LogFoodForm({ meal, onAdd, onCancel, submitLabel = "Добавить" }
                   <div className="flex items-center gap-2">
                     <label className="text-xs" style={{ color: "var(--ink-soft)" }}>Количество порций</label>
                     <input className="fp-input" style={{ width: 80 }} type="number" min="0.5" step="0.5" value={qty} onChange={(e) => setQty(e.target.value)} />
-                    <button className="fp-btn fp-btn-accent px-4 py-2 text-xs ml-auto disabled:opacity-40" disabled={!serving} onClick={submit}>{submitLabel}</button>
+                    <button type="button" className="fp-btn fp-btn-accent px-4 py-2 text-xs ml-auto disabled:opacity-40" disabled={!serving} onClick={submit}>{submitLabel}</button>
                   </div>
                 </>
               )}
@@ -312,9 +312,9 @@ function MealCountStepper({ mealCount, onChange }) {
     <div className="flex items-center justify-between mb-4 fp-card p-3" style={{ background: "var(--bg)" }}>
       <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Приёмов пищи в день</span>
       <div className="flex items-center gap-3">
-        <button className="fp-btn fp-btn-outline p-1.5 disabled:opacity-30" disabled={mealCount <= 1} onClick={() => onChange(mealCount - 1)}><Minus size={13} /></button>
+        <button type="button" className="fp-btn fp-btn-outline p-1.5 disabled:opacity-30" disabled={mealCount <= 1} onClick={() => onChange(mealCount - 1)}><Minus size={13} /></button>
         <span className="font-semibold text-sm w-4 text-center">{mealCount}</span>
-        <button className="fp-btn fp-btn-outline p-1.5 disabled:opacity-30" disabled={mealCount >= 8} onClick={() => onChange(mealCount + 1)}><Plus size={13} /></button>
+        <button type="button" className="fp-btn fp-btn-outline p-1.5 disabled:opacity-30" disabled={mealCount >= 8} onClick={() => onChange(mealCount + 1)}><Plus size={13} /></button>
       </div>
     </div>
   );
@@ -427,8 +427,8 @@ function NutritionDiary({ client, canEditMealCount, onClientUpdated }) {
                         <span style={{ color: done ? "var(--ink-soft)" : "var(--ink)", textDecoration: done ? "line-through" : "none" }}>
                           {p.name} <span style={{ color: "var(--ink-soft)" }}>· {p.qty} × {p.serving_label || "порция"}</span>
                         </span>
-                        <button onClick={() => !done && handleCheckPlanItem(p)} className="flex-shrink-0">
-                          {done ? <CheckCircle2 size={18} color="var(--accent-2)" /> : <Circle size={18} color="var(--line)" />}
+                        <button type="button" onClick={() => !done && handleCheckPlanItem(p)} className="flex-shrink-0">
+                          {done ? <CheckCircle2 size={26} color="var(--accent-2)" /> : <Circle size={26} color="var(--line)" />}
                         </button>
                       </li>
                     );
@@ -453,7 +453,7 @@ function NutritionDiary({ client, canEditMealCount, onClientUpdated }) {
                       </span>
                       <span className="flex items-center gap-2 flex-shrink-0">
                         <span style={{ color: "var(--ink-soft)" }}>{Math.round(e.kcal)} ккал</span>
-                        <button onClick={() => handleRemove(e.id)}><X size={13} color="var(--ink-soft)" /></button>
+                        <button type="button" onClick={() => handleRemove(e.id)}><X size={13} color="var(--ink-soft)" /></button>
                       </span>
                     </li>
                   );
@@ -464,7 +464,7 @@ function NutritionDiary({ client, canEditMealCount, onClientUpdated }) {
             {addingMeal === meal.id ? (
               <LogFoodForm meal={meal.id} onAdd={handleAdd} onCancel={() => setAddingMeal(null)} />
             ) : (
-              <button className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }} onClick={() => setAddingMeal(meal.id)}>
+              <button type="button" className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }} onClick={() => setAddingMeal(meal.id)}>
                 <Plus size={12} /> Добавить продукт
               </button>
             )}
@@ -506,12 +506,12 @@ export function TrainerNutritionPanel({ client, onClientUpdated }) {
   return (
     <div>
       <div className="flex gap-4 mb-4" style={{ borderBottom: "1px solid var(--line)" }}>
-        <button
+        <button type="button"
           onClick={() => setTab("plan")}
           className="text-sm pb-2"
           style={{ fontWeight: 600, color: tab === "plan" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "plan" ? "2px solid var(--accent)" : "none" }}
         >Меню</button>
-        <button
+        <button type="button"
           onClick={() => setTab("diary")}
           className="text-sm pb-2"
           style={{ fontWeight: 600, color: tab === "diary" ? "var(--ink)" : "var(--ink-soft)", borderBottom: tab === "diary" ? "2px solid var(--accent)" : "none" }}
@@ -553,7 +553,7 @@ export function TrainerNutritionPanel({ client, onClientUpdated }) {
                           <span>{it.name} <span style={{ color: "var(--ink-soft)" }}>· {it.qty} × {it.serving_label || "порция"}</span></span>
                           <span className="flex items-center gap-2 flex-shrink-0">
                             <span style={{ color: "var(--ink-soft)" }}>{Math.round(it.kcal)} ккал</span>
-                            <button onClick={() => handleRemovePlanItem(it.id)}><X size={13} color="var(--ink-soft)" /></button>
+                            <button type="button" onClick={() => handleRemovePlanItem(it.id)}><X size={13} color="var(--ink-soft)" /></button>
                           </span>
                         </li>
                       ))}
@@ -562,7 +562,7 @@ export function TrainerNutritionPanel({ client, onClientUpdated }) {
                   {addingMeal === meal.id ? (
                     <LogFoodForm meal={meal.id} onAdd={handleAddPlanItem} onCancel={() => setAddingMeal(null)} submitLabel="Добавить в план" />
                   ) : (
-                    <button className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }} onClick={() => setAddingMeal(meal.id)}>
+                    <button type="button" className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }} onClick={() => setAddingMeal(meal.id)}>
                       <Plus size={12} /> Добавить в рацион
                     </button>
                   )}
