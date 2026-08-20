@@ -395,11 +395,11 @@ function buildSteps(exercises) {
       while (j < exercises.length && exercises[j].circuit_id === ex.circuit_id) { group.push(exercises[j]); j++; }
       const rounds = ex.circuit_rounds || 1;
       for (let r = 0; r < rounds; r++) {
-        group.forEach((g) => steps.push({ key: `${g.id}-r${r}`, exercise: g, setIndex: r, roundNumber: r + 1, totalRounds: rounds, circuitPartners: group }));
+        steps.push({ key: `${ex.circuit_id}-r${r}`, isCircuit: true, exercises: group, setIndex: r, roundNumber: r + 1, totalRounds: rounds });
       }
       i = j;
     } else {
-      steps.push({ key: ex.id, exercise: ex, setIndex: null, roundNumber: null, totalRounds: null, circuitPartners: null });
+      steps.push({ key: ex.id, isCircuit: false, exercise: ex, setIndex: null, roundNumber: null, totalRounds: null });
       i += 1;
     }
   }
@@ -443,19 +443,20 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   const exercises = exerciseOrder;
   const steps = buildSteps(exercises);
   const currentStep = steps[Math.min(exIndex, steps.length - 1)];
-  const exercise = currentStep.exercise;
-  const isCircuitStep = currentStep.roundNumber !== null;
-  const isCardio = exercise.name.startsWith("Кардио");
-  const exLog = log[exercise.id];
+  const isCircuitStep = currentStep.isCircuit;
+  const exercise = isCircuitStep ? null : currentStep.exercise;
+  const isCardio = !isCircuitStep && exercise.name.startsWith("Кардио");
+  const exLog = isCircuitStep ? null : log[exercise.id];
   const totalSteps = steps.length;
   const isStepDone = (step) => {
+    if (step.isCircuit) return step.exercises.every((ex) => !!log[ex.id]?.sets[step.setIndex]?.done);
     const l = log[step.exercise.id];
-    if (!l) return false;
-    return step.setIndex === null ? l.done : !!l.sets[step.setIndex]?.done;
+    return l ? l.done : false;
   };
   const doneStepsCount = steps.filter(isStepDone).length;
   const isLast = exIndex === totalSteps - 1;
-  const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(exercise);
+  const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(isCircuitStep ? null : exercise);
+  const circuitRoundComplete = isCircuitStep && currentStep.exercises.every((ex) => log[ex.id]?.sets[currentStep.setIndex]?.done);
 
   // Тренажёр занят — переносим текущее упражнение на позицию сразу после
   // следующего, не отмечая выполненным. Доступно только вне круга (внутри
@@ -472,16 +473,16 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
     });
   };
 
-  const updateSet = (setIdx, patch) => {
+  const updateSet = (exId, setIdx, patch) => {
     setLog((prev) => {
-      const exState = prev[exercise.id];
+      const exState = prev[exId];
       const nextSets = exState.sets.map((s, i) => (i === setIdx ? { ...s, ...patch } : s));
-      return { ...prev, [exercise.id]: { sets: nextSets, done: nextSets.every((s) => s.done) } };
+      return { ...prev, [exId]: { sets: nextSets, done: nextSets.every((s) => s.done) } };
     });
   };
-  const toggleSetDone = (setIdx) => {
-    const wasDone = exLog.sets[setIdx].done;
-    updateSet(setIdx, { done: !wasDone });
+  const toggleSetDone = (exId, setIdx) => {
+    const wasDone = log[exId].sets[setIdx].done;
+    updateSet(exId, setIdx, { done: !wasDone });
     if (!wasDone) setRest({ active: true, secondsLeft: 60 });
   };
   const toggleCardioDone = () => {
@@ -496,7 +497,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
     });
   };
   const [rating, setRating] = useState(0);
-  const cardioIsTimed = isCardio && /мин|час/.test(exercise.sets[0].reps);
+  const cardioIsTimed = !isCircuitStep && isCardio && /мин|час/.test(exercise.sets[0].reps);
 
   const finish = async () => {
     setFinishing(true);
@@ -529,32 +530,39 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
       <div className="fp-bar-track mb-3"><div className="fp-bar-fill" style={{ width: `${(doneStepsCount / totalSteps) * 100}%`, background: "var(--accent-2)" }} /></div>
 
       <div className="fp-card p-4 mb-3 flex-1">
-        <div className="fp-display text-lg font-semibold mb-2.5">{exercise.name}</div>
-
-        {isCircuitStep && (
-          <div className="fp-card p-2.5 mb-3" style={{ background: "var(--bg)", borderColor: "var(--accent)", borderWidth: 1.5 }}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Круг {currentStep.roundNumber} из {currentStep.totalRounds}</span>
-            </div>
-            <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
-              {currentStep.circuitPartners.map((p) => p.name).join(" → ")}
-            </div>
-          </div>
-        )}
-
-        <ExerciseDescriptionBlock detail={exerciseDetail} loading={exerciseDetailLoading} />
-
         {isCircuitStep ? (
-          <div className="fp-card flex items-center gap-2 p-3" style={{ borderColor: "var(--accent)", borderWidth: 1.5, background: "var(--bg)" }}>
-            <input className="fp-input" style={{ width: 70, padding: "6px 8px" }} value={exLog.sets[currentStep.setIndex].reps} onChange={(e) => updateSet(currentStep.setIndex, { reps: e.target.value })} />
-            <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
-            <input className="fp-input" style={{ width: 80, padding: "6px 8px" }} value={exLog.sets[currentStep.setIndex].weight} onChange={(e) => updateSet(currentStep.setIndex, { weight: e.target.value })} placeholder="кг" />
-            <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
-            <div className="fp-checkbox" style={{ marginLeft: "auto", borderRadius: 8, width: 34, height: 34 }} onClick={() => toggleSetDone(currentStep.setIndex)}>
-              {exLog.sets[currentStep.setIndex].done && <CheckCircle2 size={19} color="#fff" />}
+          <>
+            <div className="fp-display text-lg font-semibold mb-1">Круг {currentStep.roundNumber} из {currentStep.totalRounds}</div>
+            <div className="text-xs mb-3" style={{ color: "var(--ink-soft)" }}>
+              {currentStep.exercises.map((e) => e.name).join(" → ")}
             </div>
-          </div>
-        ) : isCardio ? (
+            <div className="space-y-3">
+              {currentStep.exercises.map((ex) => {
+                const set = log[ex.id].sets[currentStep.setIndex];
+                return (
+                  <div key={ex.id} className="fp-card p-3" style={{ borderColor: set.done ? "var(--accent-2)" : "var(--line)", borderWidth: 1.5, background: "var(--bg)" }}>
+                    <div className="text-sm font-semibold mb-2">{ex.name}</div>
+                    <div className="flex items-center gap-2">
+                      <input className="fp-input" style={{ width: 70, padding: "6px 8px" }} value={set.reps} onChange={(e) => updateSet(ex.id, currentStep.setIndex, { reps: e.target.value })} />
+                      <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
+                      <input className="fp-input" style={{ width: 80, padding: "6px 8px" }} value={set.weight} onChange={(e) => updateSet(ex.id, currentStep.setIndex, { weight: e.target.value })} placeholder="кг" />
+                      <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
+                      <div className="fp-checkbox" style={{ marginLeft: "auto", borderRadius: 8, width: 34, height: 34 }} onClick={() => toggleSetDone(ex.id, currentStep.setIndex)}>
+                        {set.done && <CheckCircle2 size={19} color="#fff" />}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="fp-display text-lg font-semibold mb-2.5">{exercise.name}</div>
+
+            <ExerciseDescriptionBlock detail={exerciseDetail} loading={exerciseDetailLoading} />
+
+            {isCardio ? (
           <div>
             <div className="fp-card p-3 mb-3 text-center" style={{ background: "var(--bg)" }}>
               <div className="text-xs mb-1" style={{ color: "var(--ink-soft)" }}>Цель</div>
@@ -610,14 +618,14 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
               return (
                 <div key={idx} className="fp-card flex items-center gap-2 p-2" style={{ borderColor: "var(--accent)", borderWidth: 1.5, background: "var(--bg)" }}>
                   <span className="text-xs w-4 font-bold" style={{ color: "var(--accent)" }}>{idx + 1}</span>
-                  <input className="fp-input" style={{ width: 60, padding: "6px 8px" }} value={s.reps} onChange={(e) => updateSet(idx, { reps: e.target.value })} />
+                  <input className="fp-input" style={{ width: 60, padding: "6px 8px" }} value={s.reps} onChange={(e) => updateSet(exercise.id, idx, { reps: e.target.value })} />
                   <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
-                  <input className="fp-input" style={{ width: 68, padding: "6px 8px" }} value={s.weight} onChange={(e) => updateSet(idx, { weight: e.target.value })} placeholder="кг" />
+                  <input className="fp-input" style={{ width: 68, padding: "6px 8px" }} value={s.weight} onChange={(e) => updateSet(exercise.id, idx, { weight: e.target.value })} placeholder="кг" />
                   <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
                   <span className="text-xs ml-auto mr-1" style={{ color: "var(--ink-soft)" }}>
                     {exercise.sets[idx] ? `план ${exercise.sets[idx].reps}${exercise.sets[idx].weight ? `×${exercise.sets[idx].weight}` : ""}` : "доп. подход"}
                   </span>
-                  <div className="fp-checkbox" style={{ borderRadius: 8, width: 34, height: 34 }} onClick={() => toggleSetDone(idx)}>
+                  <div className="fp-checkbox" style={{ borderRadius: 8, width: 34, height: 34 }} onClick={() => toggleSetDone(exercise.id, idx)}>
                     {s.done && <CheckCircle2 size={19} color="#fff" />}
                   </div>
                 </div>
@@ -629,22 +637,28 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
           </div>
         )}
 
+            <div className="mt-3">
+              <input
+                className="fp-input"
+                style={{ fontSize: 12, padding: "7px 10px" }}
+                placeholder="Комментарий к упражнению (необязательно)"
+                value={exerciseNotes[exercise.id] || ""}
+                onChange={(e) => setExerciseNotes((prev) => ({ ...prev, [exercise.id]: e.target.value }))}
+              />
+            </div>
+
+            <div className="mt-3">
+              <ExerciseVideoBlock detail={exerciseDetail} loading={exerciseDetailLoading} title={exercise.name} />
+            </div>
+          </>
+        )}
+
         {rest.active && !isCardio && (
           <div className="fp-card p-2.5 mt-3 flex items-center justify-between" style={{ background: "var(--bg)" }}>
             <span className="text-xs flex items-center gap-1.5"><Timer size={13} color="var(--accent)" /> Отдых: {formatDuration(rest.secondsLeft)}</span>
             <button type="button" className="text-xs" style={{ color: "var(--accent)" }} onClick={() => setRest({ active: false, secondsLeft: 0 })}>Пропустить</button>
           </div>
         )}
-
-        <div className="mt-3">
-          <input
-            className="fp-input"
-            style={{ fontSize: 12, padding: "7px 10px" }}
-            placeholder="Комментарий к упражнению (необязательно)"
-            value={exerciseNotes[exercise.id] || ""}
-            onChange={(e) => setExerciseNotes((prev) => ({ ...prev, [exercise.id]: e.target.value }))}
-          />
-        </div>
 
         {isLast && (
           <div className="mt-2">
@@ -666,10 +680,6 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
             />
           </div>
         )}
-
-        <div className="mt-3">
-          <ExerciseVideoBlock detail={exerciseDetail} loading={exerciseDetailLoading} title={exercise.name} />
-        </div>
       </div>
 
       <div className="flex gap-2">
@@ -679,7 +689,9 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
             <Flag size={14} /> {finishing ? "Сохраняем…" : "Завершить"}
           </button>
         ) : (
-          <button type="button" className="fp-btn fp-btn-accent flex-1 py-2.5" onClick={() => setExIndex((i) => Math.min(totalSteps - 1, i + 1))}>Далее →</button>
+          <button type="button" className="fp-btn fp-btn-accent flex-1 py-2.5 disabled:opacity-40" disabled={isCircuitStep && !circuitRoundComplete} onClick={() => setExIndex((i) => Math.min(totalSteps - 1, i + 1))}>
+            {isCircuitStep ? `Завершить круг → Круг ${currentStep.roundNumber + 1}` : "Далее →"}
+          </button>
         )}
       </div>
 
