@@ -284,7 +284,7 @@ export function TrainerInbox({ trainer, clients, onOpenChat }) {
               {unreadCount > 0 && (
                 <span
                   className="text-xs font-bold flex items-center justify-center flex-shrink-0"
-                  style={{ background: "var(--accent)", color: "#fff", borderRadius: 999, minWidth: 20, height: 20, padding: "0 6px" }}
+                  style={{ background: "var(--accent)", color: "var(--accent-ink)", borderRadius: 999, minWidth: 20, height: 20, padding: "0 6px" }}
                 >
                   {unreadCount}
                 </span>
