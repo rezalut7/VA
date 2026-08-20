@@ -22,24 +22,10 @@ function dateLabel(iso) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
 }
 
-// С мета-тегом interactive-widget=resizes-content (index.html) браузер сам
-// правильно уменьшает видимую область при открытии клавиатуры — значит
-// обычный position:fixed; bottom:0 уже "приклеен" к клавиатуре без ручных
-// расчётов. Нужно только знать, открыта ли клавиатура сейчас, чтобы решить,
-// прижимать поле к самому низу (0) или оставлять над нижним меню (в покое).
-function useKeyboardOpen() {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const handler = () => setOpen(window.innerHeight - vv.height > 80);
-    vv.addEventListener("resize", handler);
-    handler();
-    return () => vv.removeEventListener("resize", handler);
-  }, []);
-  return open;
-}
-
+// Определяем открытую клавиатуру просто по фокусу поля ввода — надёжнее
+// расчётов по visualViewport, которые конфликтуют с мета-тегом
+// interactive-widget=resizes-content (он уже сам двигает видимую область,
+// поэтому вычислять размер клавиатуры вручную не нужно и даже вредно).
 function ChatAttachment({ path, type }) {
   const [url, setUrl] = useState(null);
   useEffect(() => {
@@ -64,7 +50,7 @@ function ReactionBar({ messageId, reactions, authUserId, onToggle }) {
   return (
     <div className="flex gap-1 mt-1 flex-wrap">
       {Object.entries(grouped).map(([emoji, count]) => (
-        <button
+        <button type="button"
           key={emoji}
           onClick={() => onToggle(messageId, emoji)}
           className="text-xs flex items-center gap-0.5 px-1.5 py-0.5"
@@ -87,7 +73,7 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
-  const keyboardOpen = useKeyboardOpen();
+  const [inputFocused, setInputFocused] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -146,13 +132,13 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
 
   if (loading) return <p className="text-sm px-4" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
 
-  const inputBottom = keyboardOpen ? 0 : NAV_REST_BOTTOM;
+  const inputBottom = inputFocused ? 0 : NAV_REST_BOTTOM;
 
   return (
     <div>
       <div
         className="px-4 space-y-1 fp-scroll"
-        style={{ paddingBottom: `calc(${keyboardOpen ? "0px" : NAV_REST_BOTTOM} + 76px)` }}
+        style={{ paddingBottom: `calc(${inputFocused ? "0px" : NAV_REST_BOTTOM} + 76px)` }}
       >
         {messages.length === 0 && (
           <p className="text-sm text-center mt-8" style={{ color: "var(--ink-soft)" }}>Сообщений пока нет — напишите первым.</p>
@@ -197,7 +183,7 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
                 {pickerFor === m.id && (
                   <div className="flex gap-1.5 mt-1.5 p-1.5 fp-card" style={{ background: "var(--surface)" }}>
                     {QUICK_EMOJI.map((e) => (
-                      <button key={e} onClick={() => handleToggleReaction(m.id, e)} style={{ fontSize: 18, lineHeight: 1 }}>{e}</button>
+                      <button type="button" key={e} onClick={() => handleToggleReaction(m.id, e)} style={{ fontSize: 18, lineHeight: 1 }}>{e}</button>
                     ))}
                   </div>
                 )}
@@ -218,7 +204,7 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
         }}
       >
         <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={handleFilePick} style={{ display: "none" }} />
-        <button
+        <button type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           className="flex items-center justify-center flex-shrink-0 disabled:opacity-40"
@@ -233,9 +219,11 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
           value={text}
           disabled={uploading}
           onChange={(e) => setText(e.target.value)}
+          onFocus={() => setInputFocused(true)}
+          onBlur={() => setInputFocused(false)}
           onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
         />
-        <button
+        <button type="button"
           className="flex items-center justify-center flex-shrink-0"
           style={{ width: 34, height: 34, borderRadius: "50%", background: text.trim() ? "#0A84FF" : "var(--line)", color: "#fff", border: "none" }}
           onClick={submit}
@@ -268,7 +256,7 @@ export function TrainerInbox({ trainer, clients, onOpenChat }) {
   return (
     <div className="px-4 space-y-2">
       {rows.map(({ client, lastMessage, unreadCount }) => (
-        <button
+        <button type="button"
           key={client.id}
           onClick={() => onOpenChat(client)}
           className="fp-card w-full p-3 flex items-center gap-3 text-left"

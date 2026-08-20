@@ -53,12 +53,12 @@ function ChipSelect({ options, value, onChange, allowNone = true, noneLabel = "�
   return (
     <div className="flex flex-wrap gap-1.5">
       {allowNone && (
-        <button onClick={() => onChange("")} className="fp-card px-2.5 py-1.5 text-xs" style={chipStyle(value === "")}>
+        <button type="button" onClick={() => onChange("")} className="fp-card px-2.5 py-1.5 text-xs" style={chipStyle(value === "")}>
           {noneLabel}
         </button>
       )}
       {options.map((opt) => (
-        <button key={opt} onClick={() => onChange(opt)} className="fp-card px-2.5 py-1.5 text-xs" style={chipStyle(value === opt)}>
+        <button type="button" key={opt} onClick={() => onChange(opt)} className="fp-card px-2.5 py-1.5 text-xs" style={chipStyle(value === opt)}>
           {opt}
         </button>
       ))}
@@ -83,12 +83,12 @@ function SetsEditor({ sets, onChange }) {
             <input className="fp-input" style={{ width: 76 }} type="number" min="0" value={s.weight} onChange={(e) => updateSet(idx, { weight: e.target.value })} placeholder="Вес" />
             <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
             {sets.length > 1 && (
-              <button onClick={() => removeSet(idx)} className="ml-auto"><X size={14} color="var(--danger)" /></button>
+              <button type="button" onClick={() => removeSet(idx)} className="ml-auto"><X size={14} color="var(--danger)" /></button>
             )}
           </div>
         ))}
       </div>
-      <button onClick={addSet} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
+      <button type="button" onClick={addSet} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
         <Plus size={12} /> Добавить подход
       </button>
     </div>
@@ -260,7 +260,7 @@ function ExercisePicker({ onAdd }) {
         <span style={{ fontWeight: 600, color: "var(--ink)" }}>{composedName}</span>
       </div>
 
-      <button className="fp-btn fp-btn-accent w-full py-2 text-sm flex items-center justify-center gap-1.5" onClick={submit}>
+      <button type="button" className="fp-btn fp-btn-accent w-full py-2 text-sm flex items-center justify-center gap-1.5" onClick={submit}>
         <Plus size={14} /> Добавить в тренировку
       </button>
     </div>
@@ -271,6 +271,8 @@ export function AssignWorkoutForm({ onAssign, onCancel }) {
   const [title, setTitle] = useState("");
   const [items, setItems] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [roundsInput, setRoundsInput] = useState(3);
 
   const addItem = (item) => setItems((prev) => [...prev, item]);
   const removeItem = (id) => setItems((prev) => prev.filter((x) => x.id !== id));
@@ -283,6 +285,19 @@ export function AssignWorkoutForm({ onAssign, onCancel }) {
     return copy;
   });
 
+  const toggleSelect = (id) => setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const mergeIntoCircuit = () => {
+    if (selectedIds.length < 2) return;
+    const circuitId = uid();
+    setItems((prev) => prev.map((it) => (selectedIds.includes(it.id) ? { ...it, circuitId, circuitRounds: Number(roundsInput) || 2 } : it)));
+    setSelectedIds([]);
+  };
+
+  const ungroupCircuit = (circuitId) => {
+    setItems((prev) => prev.map((it) => (it.circuitId === circuitId ? { ...it, circuitId: null, circuitRounds: null } : it)));
+  };
+
   const submit = async () => {
     if (!title.trim() || items.length === 0) return;
     setBusy(true);
@@ -294,7 +309,7 @@ export function AssignWorkoutForm({ onAssign, onCancel }) {
     <div className="fp-card p-5 mb-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="fp-display font-semibold">Новое задание</h3>
-        <button onClick={onCancel}><X size={18} color="var(--ink-soft)" /></button>
+        <button type="button" onClick={onCancel}><X size={18} color="var(--ink-soft)" /></button>
       </div>
       <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Название тренировки</label>
       <input className="fp-input mb-4" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например: Ноги + кор" />
@@ -302,24 +317,62 @@ export function AssignWorkoutForm({ onAssign, onCancel }) {
       <ExercisePicker onAdd={addItem} />
 
       {items.length > 0 && (
-        <div className="space-y-2 mb-4 fp-scroll" style={{ maxHeight: 260, overflowY: "auto" }}>
-          {items.map((it, idx) => (
-            <div key={it.id} className="flex items-center gap-2 fp-card px-3 py-2">
-              <div className="flex flex-col">
-                <button onClick={() => moveItem(it.id, -1)} disabled={idx === 0} className="disabled:opacity-25"><ArrowUp size={13} color="var(--ink-soft)" /></button>
-                <button onClick={() => moveItem(it.id, 1)} disabled={idx === items.length - 1} className="disabled:opacity-25"><ArrowDown size={13} color="var(--ink-soft)" /></button>
-              </div>
-              <div className="text-sm flex-1">
-                <div>{it.name}</div>
-                <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(it.sets)}</div>
-              </div>
-              <button onClick={() => removeItem(it.id)}><Trash2 size={16} color="var(--danger)" /></button>
-            </div>
-          ))}
+        <div className="space-y-2 mb-3 fp-scroll" style={{ maxHeight: 300, overflowY: "auto" }}>
+          {(() => {
+            const renderedCircuits = new Set();
+            return items.map((it, idx) => {
+              if (it.circuitId) {
+                if (renderedCircuits.has(it.circuitId)) return null;
+                renderedCircuits.add(it.circuitId);
+                const group = items.filter((x) => x.circuitId === it.circuitId);
+                return (
+                  <div key={it.circuitId} className="fp-card p-2" style={{ borderColor: "var(--accent)", borderWidth: 1.5, background: "var(--bg)" }}>
+                    <div className="flex items-center justify-between mb-1.5 px-1">
+                      <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Круг × {it.circuitRounds}</span>
+                      <button type="button" onClick={() => ungroupCircuit(it.circuitId)} className="text-xs" style={{ color: "var(--ink-soft)" }}>Разъединить</button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {group.map((g) => (
+                        <div key={g.id} className="flex items-center gap-2 fp-card px-2.5 py-1.5" style={{ background: "var(--surface)" }}>
+                          <div className="text-sm flex-1">
+                            <div>{g.name}</div>
+                            <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(g.sets)}</div>
+                          </div>
+                          <button type="button" onClick={() => removeItem(g.id)}><Trash2 size={15} color="var(--danger)" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <div key={it.id} className="flex items-center gap-2 fp-card px-3 py-2">
+                  <input type="checkbox" checked={selectedIds.includes(it.id)} onChange={() => toggleSelect(it.id)} />
+                  <div className="flex flex-col">
+                    <button type="button" onClick={() => moveItem(it.id, -1)} disabled={idx === 0} className="disabled:opacity-25"><ArrowUp size={13} color="var(--ink-soft)" /></button>
+                    <button type="button" onClick={() => moveItem(it.id, 1)} disabled={idx === items.length - 1} className="disabled:opacity-25"><ArrowDown size={13} color="var(--ink-soft)" /></button>
+                  </div>
+                  <div className="text-sm flex-1">
+                    <div>{it.name}</div>
+                    <div className="text-xs" style={{ color: "var(--ink-soft)" }}>{formatSets(it.sets)}</div>
+                  </div>
+                  <button type="button" onClick={() => removeItem(it.id)}><Trash2 size={16} color="var(--danger)" /></button>
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 
-      <button className="fp-btn fp-btn-accent w-full py-2.5 disabled:opacity-40" disabled={!title.trim() || items.length === 0 || busy} onClick={submit}>
+      {selectedIds.length >= 2 && (
+        <div className="fp-card p-3 mb-4 flex items-center gap-2" style={{ background: "var(--bg)" }}>
+          <span className="text-xs" style={{ color: "var(--ink-soft)" }}>Объединить {selectedIds.length} упр. в круг ×</span>
+          <input className="fp-input" style={{ width: 56, padding: "6px 8px" }} type="number" min="2" value={roundsInput} onChange={(e) => setRoundsInput(e.target.value)} />
+          <button type="button" className="fp-btn fp-btn-accent px-3 py-1.5 text-xs ml-auto" onClick={mergeIntoCircuit}>Готово</button>
+        </div>
+      )}
+
+      <button type="button" className="fp-btn fp-btn-accent w-full py-2.5 disabled:opacity-40" disabled={!title.trim() || items.length === 0 || busy} onClick={submit}>
         {busy ? "Назначаем…" : `Назначить клиенту ${items.length > 0 ? `(${items.length})` : ""}`}
       </button>
     </div>
@@ -328,13 +381,44 @@ export function AssignWorkoutForm({ onAssign, onCancel }) {
 
 /* ------------------------------ WORKOUT SESSION ------------------------------ */
 
+// Разворачивает упражнения в последовательность шагов: обычные упражнения —
+// один шаг, упражнения одного круга — по шагу на каждый раунд, круги идут
+// один за другим (несколько кругов подряд отображаются клиенту итеративно).
+function buildSteps(exercises) {
+  const steps = [];
+  let i = 0;
+  while (i < exercises.length) {
+    const ex = exercises[i];
+    if (ex.circuit_id) {
+      const group = [];
+      let j = i;
+      while (j < exercises.length && exercises[j].circuit_id === ex.circuit_id) { group.push(exercises[j]); j++; }
+      const rounds = ex.circuit_rounds || 1;
+      for (let r = 0; r < rounds; r++) {
+        group.forEach((g) => steps.push({ key: `${g.id}-r${r}`, exercise: g, setIndex: r, roundNumber: r + 1, totalRounds: rounds, circuitPartners: group }));
+      }
+      i = j;
+    } else {
+      steps.push({ key: ex.id, exercise: ex, setIndex: null, roundNumber: null, totalRounds: null, circuitPartners: null });
+      i += 1;
+    }
+  }
+  return steps;
+}
+
 export function WorkoutSession({ workout, onExit, onFinish }) {
   const [exIndex, setExIndex] = useState(0);
   const [exerciseOrder, setExerciseOrder] = useState(workout.workout_exercises);
   const [log, setLog] = useState(() => {
     const initial = {};
     workout.workout_exercises.forEach((ex) => {
-      initial[ex.id] = { sets: ex.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false })), done: false };
+      if (ex.circuit_id) {
+        const rounds = ex.circuit_rounds || 1;
+        const template = ex.sets[0] || { reps: "10", weight: "" };
+        initial[ex.id] = { sets: Array.from({ length: rounds }, () => ({ reps: template.reps, weight: template.weight, done: false })), done: false };
+      } else {
+        initial[ex.id] = { sets: ex.sets.map((s) => ({ reps: s.reps, weight: s.weight, done: false })), done: false };
+      }
     });
     return initial;
   });
@@ -357,22 +441,33 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   }, []);
 
   const exercises = exerciseOrder;
-  const exercise = exercises[exIndex];
+  const steps = buildSteps(exercises);
+  const currentStep = steps[Math.min(exIndex, steps.length - 1)];
+  const exercise = currentStep.exercise;
+  const isCircuitStep = currentStep.roundNumber !== null;
   const isCardio = exercise.name.startsWith("Кардио");
   const exLog = log[exercise.id];
-  const totalExercises = exercises.length;
-  const doneCount = Object.values(log).filter((l) => l.done).length;
-  const isLast = exIndex === totalExercises - 1;
+  const totalSteps = steps.length;
+  const isStepDone = (step) => {
+    const l = log[step.exercise.id];
+    if (!l) return false;
+    return step.setIndex === null ? l.done : !!l.sets[step.setIndex]?.done;
+  };
+  const doneStepsCount = steps.filter(isStepDone).length;
+  const isLast = exIndex === totalSteps - 1;
   const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(exercise);
 
   // Тренажёр занят — переносим текущее упражнение на позицию сразу после
-  // следующего, не отмечая выполненным. exIndex не меняем — после свапа
+  // следующего, не отмечая выполненным. Доступно только вне круга (внутри
+  // круга порядок раундов менять некуда). exIndex не меняем — после свапа
   // на этом месте окажется то, что раньше шло следующим.
   const postponeExercise = () => {
-    if (exIndex >= exercises.length - 1) return;
+    if (isCircuitStep || exIndex >= steps.length - 1) return;
     setExerciseOrder((prev) => {
+      const idx = prev.findIndex((e) => e.id === exercise.id);
+      if (idx === -1 || idx >= prev.length - 1) return prev;
       const arr = [...prev];
-      [arr[exIndex], arr[exIndex + 1]] = [arr[exIndex + 1], arr[exIndex]];
+      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
       return arr;
     });
   };
@@ -421,22 +516,45 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="fp-display text-lg font-semibold">{workout.title}</div>
-          <div className="text-xs" style={{ color: "var(--ink-soft)" }}>Упражнение {exIndex + 1} из {totalExercises}</div>
+          <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
+            {isCircuitStep ? `Круг · упражнение ${exIndex + 1} из ${totalSteps}` : `Упражнение ${exIndex + 1} из ${totalSteps}`}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold flex items-center gap-1"><Timer size={14} color="var(--ink-soft)" /> {formatDuration(elapsedSec)}</span>
-          <button onClick={() => setConfirmExit(true)}><X size={20} color="var(--ink-soft)" /></button>
+          <button type="button" onClick={() => setConfirmExit(true)}><X size={20} color="var(--ink-soft)" /></button>
         </div>
       </div>
 
-      <div className="fp-bar-track mb-3"><div className="fp-bar-fill" style={{ width: `${(doneCount / totalExercises) * 100}%`, background: "var(--accent-2)" }} /></div>
+      <div className="fp-bar-track mb-3"><div className="fp-bar-fill" style={{ width: `${(doneStepsCount / totalSteps) * 100}%`, background: "var(--accent-2)" }} /></div>
 
       <div className="fp-card p-4 mb-3 flex-1">
         <div className="fp-display text-lg font-semibold mb-2.5">{exercise.name}</div>
 
+        {isCircuitStep && (
+          <div className="fp-card p-2.5 mb-3" style={{ background: "var(--bg)", borderColor: "var(--accent)", borderWidth: 1.5 }}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold" style={{ color: "var(--accent)" }}>Круг {currentStep.roundNumber} из {currentStep.totalRounds}</span>
+            </div>
+            <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
+              {currentStep.circuitPartners.map((p) => p.name).join(" → ")}
+            </div>
+          </div>
+        )}
+
         <ExerciseDescriptionBlock detail={exerciseDetail} loading={exerciseDetailLoading} />
 
-        {isCardio ? (
+        {isCircuitStep ? (
+          <div className="fp-card flex items-center gap-2 p-3" style={{ borderColor: "var(--accent)", borderWidth: 1.5, background: "var(--bg)" }}>
+            <input className="fp-input" style={{ width: 70, padding: "6px 8px" }} value={exLog.sets[currentStep.setIndex].reps} onChange={(e) => updateSet(currentStep.setIndex, { reps: e.target.value })} />
+            <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
+            <input className="fp-input" style={{ width: 80, padding: "6px 8px" }} value={exLog.sets[currentStep.setIndex].weight} onChange={(e) => updateSet(currentStep.setIndex, { weight: e.target.value })} placeholder="кг" />
+            <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
+            <div className="fp-checkbox" style={{ marginLeft: "auto", borderRadius: 8, width: 34, height: 34 }} onClick={() => toggleSetDone(currentStep.setIndex)}>
+              {exLog.sets[currentStep.setIndex].done && <CheckCircle2 size={19} color="#fff" />}
+            </div>
+          </div>
+        ) : isCardio ? (
           <div>
             <div className="fp-card p-3 mb-3 text-center" style={{ background: "var(--bg)" }}>
               <div className="text-xs mb-1" style={{ color: "var(--ink-soft)" }}>Цель</div>
@@ -445,13 +563,13 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
             {cardioIsTimed && (
               <div className="fp-card p-3 mb-3 text-center" style={{ background: "var(--bg)" }}>
                 <div className="fp-display text-2xl font-bold mb-2">{formatDuration(cardio.elapsedSec)}</div>
-                <button className="fp-btn fp-btn-outline px-5 py-2 text-sm inline-flex items-center gap-2" onClick={() => setCardio((c) => ({ ...c, running: !c.running }))}>
+                <button type="button" className="fp-btn fp-btn-outline px-5 py-2 text-sm inline-flex items-center gap-2" onClick={() => setCardio((c) => ({ ...c, running: !c.running }))}>
                   {cardio.running ? <Pause size={14} /> : <Play size={14} />}
                   {cardio.running ? "Пауза" : "Старт"}
                 </button>
               </div>
             )}
-            <button
+            <button type="button"
               className="fp-btn w-full py-2.5 flex items-center justify-center gap-2"
               style={exLog.done ? { background: "var(--accent-2)", color: "#fff" } : { background: "var(--bg)", color: "var(--ink)" }}
               onClick={toggleCardioDone}
@@ -505,7 +623,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
                 </div>
               );
             })}
-            <button onClick={addExtraSet} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
+            <button type="button" onClick={addExtraSet} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
               <Plus size={12} /> Добавить подход
             </button>
           </div>
@@ -514,7 +632,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
         {rest.active && !isCardio && (
           <div className="fp-card p-2.5 mt-3 flex items-center justify-between" style={{ background: "var(--bg)" }}>
             <span className="text-xs flex items-center gap-1.5"><Timer size={13} color="var(--accent)" /> Отдых: {formatDuration(rest.secondsLeft)}</span>
-            <button className="text-xs" style={{ color: "var(--accent)" }} onClick={() => setRest({ active: false, secondsLeft: 0 })}>Пропустить</button>
+            <button type="button" className="text-xs" style={{ color: "var(--accent)" }} onClick={() => setRest({ active: false, secondsLeft: 0 })}>Пропустить</button>
           </div>
         )}
 
@@ -555,18 +673,19 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
       </div>
 
       <div className="flex gap-2">
-        <button className="fp-btn fp-btn-outline flex-1 py-2.5 disabled:opacity-30" disabled={exIndex === 0} onClick={() => setExIndex((i) => Math.max(0, i - 1))}>← Назад</button>
+        <button type="button" className="fp-btn fp-btn-outline flex-1 py-2.5 disabled:opacity-30" disabled={exIndex === 0} onClick={() => setExIndex((i) => Math.max(0, i - 1))}>← Назад</button>
         {isLast ? (
-          <button className="fp-btn fp-btn-accent flex-1 py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={finishing} onClick={finish}>
+          <button type="button" className="fp-btn fp-btn-accent flex-1 py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-50" disabled={finishing} onClick={finish}>
             <Flag size={14} /> {finishing ? "Сохраняем…" : "Завершить"}
           </button>
         ) : (
-          <button className="fp-btn fp-btn-accent flex-1 py-2.5" onClick={() => setExIndex((i) => Math.min(totalExercises - 1, i + 1))}>Далее →</button>
+          <button type="button" className="fp-btn fp-btn-accent flex-1 py-2.5" onClick={() => setExIndex((i) => Math.min(totalSteps - 1, i + 1))}>Далее →</button>
         )}
       </div>
 
-      {!isLast && (
+      {!isLast && !isCircuitStep && (
         <button
+          type="button"
           className="text-xs mt-2 flex items-center justify-center gap-1 w-full"
           style={{ color: "var(--ink-soft)" }}
           onClick={postponeExercise}
@@ -580,8 +699,121 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
           <div className="fp-card p-5 w-full max-w-xs text-center">
             <p className="text-sm mb-4">Прервать тренировку? Прогресс за эту сессию не сохранится.</p>
             <div className="flex gap-2">
-              <button className="fp-btn fp-btn-outline flex-1 py-2 text-sm" onClick={() => setConfirmExit(false)}>Отмена</button>
-              <button className="fp-btn flex-1 py-2 text-sm" style={{ background: "var(--danger)", color: "#fff" }} onClick={onExit}>Прервать</button>
+              <button type="button" className="fp-btn fp-btn-outline flex-1 py-2 text-sm" onClick={() => setConfirmExit(false)}>Отмена</button>
+              <button type="button" className="fp-btn flex-1 py-2 text-sm" style={{ background: "var(--danger)", color: "#fff" }} onClick={onExit}>Прервать</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------- СВОБОДНАЯ (СВОЯ) ТРЕНИРОВКА ------------------------- */
+// Клиент запускает сессию сразу — таймер идёт с этого момента, упражнения
+// добавляются по ходу дела (не планируются заранее). Название обязательно
+// вводится в самом конце, перед сохранением.
+
+export function FreeformWorkoutSession({ onExit, onFinish }) {
+  const [startedAt] = useState(() => Date.now());
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [exercises, setExercises] = useState([]);
+  const [showPicker, setShowPicker] = useState(true);
+  const [title, setTitle] = useState("");
+  const [confirmExit, setConfirmExit] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsedSec((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const addExercise = (item) => {
+    setExercises((prev) => [...prev, { ...item, sets: item.sets.map((s) => ({ ...s, done: false })) }]);
+    setShowPicker(false);
+  };
+  const removeExercise = (exId) => setExercises((prev) => prev.filter((ex) => ex.id !== exId));
+  const updateSet = (exId, idx, patch) => {
+    setExercises((prev) => prev.map((ex) => (ex.id !== exId ? ex : { ...ex, sets: ex.sets.map((s, i) => (i === idx ? { ...s, ...patch } : s)) })));
+  };
+  const toggleSetDone = (exId, idx) => {
+    setExercises((prev) => prev.map((ex) => (ex.id !== exId ? ex : { ...ex, sets: ex.sets.map((s, i) => (i === idx ? { ...s, done: !s.done } : s)) })));
+  };
+  const addSetTo = (exId) => {
+    setExercises((prev) => prev.map((ex) => {
+      if (ex.id !== exId) return ex;
+      const last = ex.sets[ex.sets.length - 1] || { reps: "10", weight: "" };
+      return { ...ex, sets: [...ex.sets, { reps: last.reps, weight: last.weight, done: false }] };
+    }));
+  };
+
+  const canFinish = exercises.length > 0 && title.trim().length > 0;
+
+  const finish = async () => {
+    if (!canFinish) return;
+    setFinishing(true);
+    await onFinish({ title: title.trim(), startedAt, finishedAt: Date.now(), durationSec: elapsedSec, exercises });
+  };
+
+  return (
+    <div className="min-h-screen fp-safe-top px-4 pb-6 max-w-lg mx-auto flex flex-col" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 24px)" }}>
+      <div className="flex items-center justify-between mb-4">
+        <button type="button" onClick={() => setConfirmExit(true)}><X size={20} color="var(--ink-soft)" /></button>
+        <div className="fp-display font-semibold flex items-center gap-1.5"><Timer size={14} color="var(--accent)" /> {formatDuration(elapsedSec)}</div>
+        <div style={{ width: 20 }} />
+      </div>
+
+      {exercises.map((ex) => (
+        <div key={ex.id} className="fp-card p-4 mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="font-semibold">{ex.name}</div>
+            <button type="button" onClick={() => removeExercise(ex.id)}><Trash2 size={14} color="var(--danger)" /></button>
+          </div>
+          <div className="space-y-2">
+            {ex.sets.map((s, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="text-xs w-4" style={{ color: "var(--ink-soft)" }}>{idx + 1}</span>
+                <input className="fp-input" style={{ width: 60, padding: "6px 8px" }} value={s.reps} onChange={(e) => updateSet(ex.id, idx, { reps: e.target.value })} />
+                <span className="text-xs" style={{ color: "var(--ink-soft)" }}>×</span>
+                <input className="fp-input" style={{ width: 68, padding: "6px 8px" }} value={s.weight} onChange={(e) => updateSet(ex.id, idx, { weight: e.target.value })} placeholder="кг" />
+                <span className="text-xs" style={{ color: "var(--ink-soft)" }}>кг</span>
+                <div className="fp-checkbox" style={{ marginLeft: "auto", borderRadius: 8, width: 32, height: 32 }} onClick={() => toggleSetDone(ex.id, idx)}>
+                  {s.done && <CheckCircle2 size={18} color="#fff" />}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={() => addSetTo(ex.id)} className="text-xs mt-2 flex items-center gap-1" style={{ color: "var(--accent)" }}>
+            <Plus size={12} /> Подход
+          </button>
+        </div>
+      ))}
+
+      {showPicker ? (
+        <ExercisePicker onAdd={addExercise} />
+      ) : (
+        <button type="button" className="fp-btn fp-btn-outline w-full py-2.5 mb-4 flex items-center justify-center gap-2" onClick={() => setShowPicker(true)}>
+          <Plus size={14} /> Добавить упражнение
+        </button>
+      )}
+
+      {exercises.length > 0 && (
+        <div className="mt-2">
+          <label className="text-xs mb-1 block" style={{ color: "var(--ink-soft)" }}>Название тренировки *</label>
+          <input className="fp-input mb-3" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Обязательно перед сохранением" />
+          <button type="button" className="fp-btn fp-btn-accent w-full py-2.5 disabled:opacity-40" disabled={!canFinish || finishing} onClick={finish}>
+            {finishing ? "Сохраняем…" : "Завершить тренировку"}
+          </button>
+        </div>
+      )}
+
+      {confirmExit && (
+        <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)", zIndex: 60 }}>
+          <div className="fp-card p-5 max-w-xs">
+            <p className="text-sm mb-4">Выйти без сохранения? Прогресс потеряется.</p>
+            <div className="flex gap-2">
+              <button type="button" className="fp-btn fp-btn-outline flex-1" onClick={() => setConfirmExit(false)}>Остаться</button>
+              <button type="button" className="fp-btn fp-btn-accent flex-1" onClick={onExit}>Выйти</button>
             </div>
           </div>
         </div>
