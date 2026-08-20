@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
-  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X, BookOpen, Trash2,
+  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X, BookOpen, Trash2, RotateCcw,
 } from "lucide-react";
 import "./App.css";
 import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
@@ -83,6 +83,10 @@ function PageHeader({ eyebrow, title, subtitle, onLogout }) {
       </div>
     </div>
   );
+}
+
+function formatWorkoutDate(iso) {
+  return new Date(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
 }
 
 function ComingSoonCard({ icon: Icon, title, text }) {
@@ -524,6 +528,7 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
   const [activeSession, setActiveSession] = useState(null);
   const [viewingWorkout, setViewingWorkout] = useState(null);
+  const [buildingOwnWorkout, setBuildingOwnWorkout] = useState(false);
   const [pushStatus, setPushStatus] = useState(null);
   const [pushDetail, setPushDetail] = useState("");
   const plan = PLANS.find((p) => p.id === client.plan);
@@ -547,6 +552,22 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
   const handleFinishSession = async (payload) => {
     await saveWorkoutSession(client.id, payload);
     setActiveSession(null);
+    loadWorkouts();
+  };
+
+  const handleCreateOwnWorkout = async (title, items) => {
+    await createWorkout(client.id, title, items, null, "client");
+    setBuildingOwnWorkout(false);
+    loadWorkouts();
+  };
+
+  const handleRepeatWorkout = async (w) => {
+    // Самостоятельная копия — без привязки к периодизации/микроциклу оригинала.
+    const items = w.workout_exercises.map((e) => ({
+      name: e.name, sets: e.sets, isAssisted: e.is_assisted, periodizationEnabled: e.periodization_enabled,
+      baseName: e.base_name, equipment: e.equipment, side: e.side,
+    }));
+    await createWorkout(client.id, w.title, items, null, w.created_by || "trainer");
     loadWorkouts();
   };
 
@@ -616,12 +637,18 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
                   )}
                   {current ? (
                     <div className="fp-card p-4">
-                      <div className="font-semibold mb-3">{current.title}</div>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="font-semibold">{current.title}</div>
+                        {current.created_by === "client" && (
+                          <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>Своя тренировка</Chip>
+                        )}
+                      </div>
+                      <div className="text-xs mb-3" style={{ color: "var(--ink-soft)" }}>{formatWorkoutDate(current.created_at)}</div>
                       <ul className="space-y-2.5 mb-3">
                         {current.workout_exercises.map((e) => (
                           <li key={e.id} className="flex items-center gap-3">
                             <div className={`fp-checkbox ${e.done ? "done" : ""}`} onClick={() => handleToggleExercise(e.id, e.done)}>
-                              {e.done && <CheckCircle2 size={16} color="#fff" />}
+                              {e.done && <CheckCircle2 size={20} color="#fff" />}
                             </div>
                             <div>
                               <div style={{ textDecoration: e.done ? "line-through" : "none", color: e.done ? "var(--ink-soft)" : "var(--ink)" }}>{e.name}</div>
@@ -635,7 +662,15 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
                       </button>
                     </div>
                   ) : (
-                    <ComingSoonCard icon={CheckCircle2} title="Все тренировки выполнены" text="Ждите новое задание от тренера." />
+                    <ComingSoonCard icon={CheckCircle2} title="Все тренировки выполнены" text="Ждите новое задание от тренера или добавьте свою." />
+                  )}
+
+                  {buildingOwnWorkout ? (
+                    <AssignWorkoutForm onAssign={handleCreateOwnWorkout} onCancel={() => setBuildingOwnWorkout(false)} />
+                  ) : (
+                    <button className="fp-btn fp-btn-outline w-full py-2.5 flex items-center justify-center gap-2" onClick={() => setBuildingOwnWorkout(true)}>
+                      <Plus size={15} /> Своя тренировка
+                    </button>
                   )}
 
                   {history.length > 0 && (
@@ -643,11 +678,21 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
                       <div className="text-xs font-semibold mt-2 mb-2" style={{ color: "var(--ink-soft)" }}>АРХИВ ПРОЙДЕННЫХ ({history.length})</div>
                       <div className="space-y-2">
                         {history.map((w) => (
-                          <div key={w.id} className="fp-card p-3 flex items-center justify-between">
-                            <span className="text-sm">{w.title}</span>
-                            <div className="flex items-center gap-3">
-                              <button onClick={() => setViewingWorkout(w)} className="flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: "50%", border: "1.5px solid var(--ink-soft)", color: "var(--ink-soft)", fontSize: 11, fontWeight: 700, fontStyle: "italic" }}>i</button>
-                              <CheckCircle2 size={16} color="var(--accent-2)" />
+                          <div key={w.id} className="fp-card p-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm">{w.title}</span>
+                              <div className="flex items-center gap-3 flex-shrink-0">
+                                <button onClick={() => setViewingWorkout(w)} className="flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: "50%", border: "1.5px solid var(--ink-soft)", color: "var(--ink-soft)", fontSize: 11, fontWeight: 700, fontStyle: "italic" }}>i</button>
+                                <CheckCircle2 size={16} color="var(--accent-2)" />
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs" style={{ color: "var(--ink-soft)" }}>
+                                {formatWorkoutDate(w.created_at)}{w.created_by === "client" ? " · своя" : ""}
+                              </span>
+                              <button onClick={() => handleRepeatWorkout(w)} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
+                                <RotateCcw size={12} /> Повторить
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -865,6 +910,9 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
                           </button>
                         )}
                       </div>
+                    </div>
+                    <div className="text-xs mb-2" style={{ color: "var(--ink-soft)" }}>
+                      {formatWorkoutDate(w.created_at)}{w.created_by === "client" ? " · создана клиентом" : ""}
                     </div>
                     <ul className="text-sm space-y-1">
                       {w.workout_exercises.map((e) => (

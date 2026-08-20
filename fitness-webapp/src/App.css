@@ -120,7 +120,7 @@ button, a {
 .fp-scoreboard .num { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 30px; line-height: 1; }
 
 .fp-checkbox {
-  width: 26px; height: 26px; border-radius: 50%;
+  width: 32px; height: 32px; border-radius: 50%;
   border: 2px solid var(--line);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0;
