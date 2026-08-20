@@ -207,6 +207,8 @@ export async function createWorkout(clientId, title, items, periodizationWeek, c
     base_name: it.baseName || null,
     equipment: it.equipment || null,
     side: it.side || null,
+    circuit_id: it.circuitId || null,
+    circuit_rounds: it.circuitRounds || null,
   }));
   const { error: exError } = await supabase.from("workout_exercises").insert(rows);
   if (exError) throw exError;
@@ -538,6 +540,7 @@ export async function createTemplate(trainerId, title, items) {
     template_id: template.id, name: it.name, sets: it.sets, position: i,
     is_assisted: !!it.isAssisted, periodization_enabled: it.periodizationEnabled !== false,
     base_name: it.baseName || null, equipment: it.equipment || null, side: it.side || null,
+    circuit_id: it.circuitId || null, circuit_rounds: it.circuitRounds || null,
   }));
   const { error: exError } = await supabase.from("workout_template_exercises").insert(rows);
   if (exError) throw exError;
@@ -557,6 +560,7 @@ export async function assignTemplateToClient(clientId, template, titleOverride) 
       name: e.name, sets: e.sets,
       isAssisted: e.is_assisted, periodizationEnabled: e.periodization_enabled,
       baseName: e.base_name, equipment: e.equipment, side: e.side,
+      circuitId: e.circuit_id, circuitRounds: e.circuit_rounds,
     }))
   );
 }
@@ -626,6 +630,7 @@ export async function createMicrocycle(trainerId, title, days) {
       microcycle_workout_id: workout.id, name: it.name, sets: it.sets, position: j,
       is_assisted: !!it.isAssisted, periodization_enabled: it.periodizationEnabled !== false,
       base_name: it.baseName || null, equipment: it.equipment || null, side: it.side || null,
+      circuit_id: it.circuitId || null, circuit_rounds: it.circuitRounds || null,
     }));
     const { error: exError } = await supabase.from("microcycle_workout_exercises").insert(rows);
     if (exError) throw exError;
