@@ -528,6 +528,7 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
   const [activeSession, setActiveSession] = useState(null);
   const [viewingWorkout, setViewingWorkout] = useState(null);
+  const [planningWorkout, setPlanningWorkout] = useState(false);
   const [pushStatus, setPushStatus] = useState(null);
   const [pushDetail, setPushDetail] = useState("");
   const plan = PLANS.find((p) => p.id === client.plan);
@@ -575,6 +576,12 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
       });
     }
     setActiveSession(null);
+    loadWorkouts();
+  };
+
+  const handlePlanOwnWorkout = async (title, items) => {
+    await createWorkout(client.id, title, items, null, "client");
+    setPlanningWorkout(false);
     loadWorkouts();
   };
 
@@ -675,9 +682,18 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
                     <ComingSoonCard icon={CheckCircle2} title="Все тренировки выполнены" text="Ждите новое задание от тренера или добавьте свою." />
                   )}
 
-                  <button type="button" className="fp-btn fp-btn-outline w-full py-2.5 flex items-center justify-center gap-2" onClick={() => setActiveSession("freeform")}>
-                    <Plus size={15} /> Своя тренировка
-                  </button>
+                  {planningWorkout ? (
+                    <AssignWorkoutForm onAssign={handlePlanOwnWorkout} onCancel={() => setPlanningWorkout(false)} />
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" className="fp-btn fp-btn-accent py-2.5 flex items-center justify-center gap-2" onClick={() => setActiveSession("freeform")}>
+                        <Plus size={15} /> Начать сейчас
+                      </button>
+                      <button type="button" className="fp-btn fp-btn-outline py-2.5 flex items-center justify-center gap-2" onClick={() => setPlanningWorkout(true)}>
+                        <CalendarDays size={15} /> Запланировать
+                      </button>
+                    </div>
+                  )}
 
                   {history.length > 0 && (
                     <div>
