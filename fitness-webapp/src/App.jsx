@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
-  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X, BookOpen, Trash2, RotateCcw, Plus,
+  Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X, BookOpen, Trash2, Plus,
 } from "lucide-react";
 import "./App.css";
-import { AssignWorkoutForm, WorkoutSession, formatSets } from "./components/Workouts";
+import { AssignWorkoutForm, WorkoutSession, FreeformWorkoutSession, formatSets } from "./components/Workouts";
 import { NutritionTab, TrainerNutritionPanel } from "./components/Nutrition";
 import { ChatPanel, TrainerInbox } from "./components/Chat";
 import { ProgressTab, TrainerProgressPanel } from "./components/Progress";
@@ -528,7 +528,6 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
   const [loadingWorkouts, setLoadingWorkouts] = useState(true);
   const [activeSession, setActiveSession] = useState(null);
   const [viewingWorkout, setViewingWorkout] = useState(null);
-  const [buildingOwnWorkout, setBuildingOwnWorkout] = useState(false);
   const [pushStatus, setPushStatus] = useState(null);
   const [pushDetail, setPushDetail] = useState("");
   const plan = PLANS.find((p) => p.id === client.plan);
@@ -555,19 +554,27 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
     loadWorkouts();
   };
 
-  const handleCreateOwnWorkout = async (title, items) => {
-    await createWorkout(client.id, title, items, null, "client");
-    setBuildingOwnWorkout(false);
-    loadWorkouts();
-  };
-
-  const handleRepeatWorkout = async (w) => {
-    // Самостоятельная копия — без привязки к периодизации/микроциклу оригинала.
-    const items = w.workout_exercises.map((e) => ({
-      name: e.name, sets: e.sets, isAssisted: e.is_assisted, periodizationEnabled: e.periodization_enabled,
-      baseName: e.base_name, equipment: e.equipment, side: e.side,
+  const handleFinishOwnWorkout = async (payload) => {
+    const items = payload.exercises.map((ex) => ({
+      name: ex.name, sets: ex.sets.map((s) => ({ reps: s.reps, weight: s.weight })),
+      isAssisted: ex.isAssisted, periodizationEnabled: ex.periodizationEnabled,
+      baseName: ex.baseName, equipment: ex.equipment, side: ex.side,
     }));
-    await createWorkout(client.id, w.title, items, null, w.created_by || "trainer");
+    const workout = await createWorkout(client.id, payload.title, items, null, "client");
+    const fresh = await fetchWorkoutsForClient(client.id);
+    const created = fresh.find((w) => w.id === workout.id);
+    if (created) {
+      await Promise.all(created.workout_exercises.map((ex) => toggleExerciseDone(ex.id, true)));
+      await saveWorkoutSession(client.id, {
+        workoutId: workout.id, title: payload.title, startedAt: payload.startedAt, finishedAt: payload.finishedAt,
+        durationSec: payload.durationSec,
+        exercises: created.workout_exercises.map((ex, i) => ({
+          id: ex.id, name: ex.name, plannedSets: ex.sets, actualSets: payload.exercises[i].sets, done: true, note: null,
+        })),
+        note: null, rating: null,
+      });
+    }
+    setActiveSession(null);
     loadWorkouts();
   };
 
@@ -590,6 +597,9 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
     setPushStatus(null);
   };
 
+  if (activeSession === "freeform") {
+    return <FreeformWorkoutSession onExit={() => setActiveSession(null)} onFinish={handleFinishOwnWorkout} />;
+  }
   if (activeSession) {
     return <WorkoutSession workout={activeSession} onExit={() => setActiveSession(null)} onFinish={handleFinishSession} />;
   }
@@ -665,13 +675,9 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
                     <ComingSoonCard icon={CheckCircle2} title="Все тренировки выполнены" text="Ждите новое задание от тренера или добавьте свою." />
                   )}
 
-                  {buildingOwnWorkout ? (
-                    <AssignWorkoutForm onAssign={handleCreateOwnWorkout} onCancel={() => setBuildingOwnWorkout(false)} />
-                  ) : (
-                    <button className="fp-btn fp-btn-outline w-full py-2.5 flex items-center justify-center gap-2" onClick={() => setBuildingOwnWorkout(true)}>
-                      <Plus size={15} /> Своя тренировка
-                    </button>
-                  )}
+                  <button type="button" className="fp-btn fp-btn-outline w-full py-2.5 flex items-center justify-center gap-2" onClick={() => setActiveSession("freeform")}>
+                    <Plus size={15} /> Своя тренировка
+                  </button>
 
                   {history.length > 0 && (
                     <div>
@@ -686,14 +692,9 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, onClientUpd
                                 <CheckCircle2 size={16} color="var(--accent-2)" />
                               </div>
                             </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs" style={{ color: "var(--ink-soft)" }}>
-                                {formatWorkoutDate(w.created_at)}{w.created_by === "client" ? " · своя" : ""}
-                              </span>
-                              <button onClick={() => handleRepeatWorkout(w)} className="text-xs flex items-center gap-1" style={{ color: "var(--accent)" }}>
-                                <RotateCcw size={12} /> Повторить
-                              </button>
-                            </div>
+                            <span className="text-xs" style={{ color: "var(--ink-soft)" }}>
+                              {formatWorkoutDate(w.created_at)}{w.created_by === "client" ? " · своя" : ""}
+                            </span>
                           </div>
                         ))}
                       </div>
