@@ -165,8 +165,14 @@ function LoginScreen({ onEnter }) {
         <div className="grid sm:grid-cols-2 gap-4">
           {benefits.map((b) => (
             <div key={b.title} className="fp-card p-5">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center mb-3" style={{ background: "var(--solid-dark)" }}>
-                <b.icon size={18} color="#fff" />
+              <div
+                className="w-11 h-11 rounded-full flex items-center justify-center mb-3"
+                style={{
+                  background: "radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--accent) 55%, white) 0%, var(--accent) 50%, var(--accent-2) 100%)",
+                  boxShadow: "0 4px 12px color-mix(in srgb, var(--accent) 40%, transparent)",
+                }}
+              >
+                <b.icon size={19} color="var(--accent-ink)" />
               </div>
               <div className="fp-display font-semibold mb-1">{b.title}</div>
               <p className="text-sm" style={{ color: "var(--ink-soft)" }}>{b.text}</p>
@@ -322,8 +328,14 @@ function SubscribeGate({ client, onPaid }) {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
       <div className="fp-card p-7 w-full max-w-sm text-center">
-        <div className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-4" style={{ background: "var(--accent)" }}>
-          <Sparkles size={20} color="#fff" />
+        <div
+          className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-4"
+          style={{
+            background: "radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--accent) 55%, white) 0%, var(--accent) 50%, var(--accent-2) 100%)",
+            boxShadow: "0 4px 14px color-mix(in srgb, var(--accent) 40%, transparent)",
+          }}
+        >
+          <Sparkles size={20} color="var(--accent-ink)" />
         </div>
         <h2 className="fp-display text-2xl font-semibold mb-1">Тариф «{plan.name}»</h2>
         <p className="text-sm mb-5" style={{ color: "var(--ink-soft)" }}>{client.name}, оформите подписку, чтобы продолжить.</p>
