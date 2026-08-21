@@ -6,6 +6,7 @@ import {
   fetchMealPlan, addMealPlanItem, removeMealPlanItem, updateClientProfile,
 } from "../lib/api";
 import { NutritionCalculator } from "./NutritionCalculator";
+import { useSwipe } from "../lib/useSwipe";
 
 function CollapsibleCalculator({ client, onProfileSaved, onGoalsApplied }) {
   const [open, setOpen] = useState(false);
@@ -363,12 +364,19 @@ function NutritionDiary({ client, canEditMealCount, onClientUpdated }) {
   };
 
   const totals = macroTotals(entries);
+  const isToday = date === todayStr();
+  // Свайп влево/вправо — тот же жест, что и стрелки в DateNav, просто удобнее
+  // с телефона: не нужно целиться в маленькую кнопку.
+  const swipeDay = useSwipe({
+    onSwipeLeft: () => !isToday && setDate(shiftDateStr(date, 1)),
+    onSwipeRight: () => setDate(shiftDateStr(date, -1)),
+  });
   const goals = client.goals || { kcal: 2000, protein: 120, carbs: 220, fat: 60 };
 
   if (loading && entries.length === 0) return <p className="text-sm" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
 
   return (
-    <div>
+    <div {...swipeDay}>
       <DateNav date={date} onChange={setDate} />
 
       <div className="fp-card p-5 mb-5 flex flex-col items-center">

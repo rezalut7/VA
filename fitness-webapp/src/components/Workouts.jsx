@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useSwipe } from "../lib/useSwipe";
 import { Plus, X, Trash2, ArrowUp, ArrowDown, Timer, Play, Pause, Flag, CheckCircle2 } from "lucide-react";
 import { EXERCISE_GROUPS } from "../data/exerciseGroups";
 import { useExerciseDetail, ExerciseDescriptionBlock, ExerciseVideoBlock } from "./ExerciseLibrary";
@@ -455,6 +456,12 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   };
   const doneStepsCount = steps.filter(isStepDone).length;
   const isLast = exIndex === totalSteps - 1;
+  // Свайп влево/вправо — переход между упражнениями, руки часто заняты/потные
+  // во время тренировки, листать пальцем удобнее, чем целиться в кнопку.
+  const swipeNav = useSwipe({
+    onSwipeLeft: () => !isLast && setExIndex((i) => Math.min(totalSteps - 1, i + 1)),
+    onSwipeRight: () => exIndex > 0 && setExIndex((i) => Math.max(0, i - 1)),
+  });
   const { detail: exerciseDetail, loading: exerciseDetailLoading } = useExerciseDetail(exercise);
 
   // Тренажёр занят — переносим текущее упражнение на позицию сразу после
@@ -512,7 +519,7 @@ export function WorkoutSession({ workout, onExit, onFinish }) {
   };
 
   return (
-    <div className="min-h-screen fp-safe-top px-4 pb-6 max-w-lg mx-auto flex flex-col" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 24px)" }}>
+    <div className="min-h-screen fp-safe-top px-4 pb-6 max-w-lg mx-auto flex flex-col" style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 24px)" }} {...swipeNav}>
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="fp-display text-lg font-semibold">{workout.title}</div>
