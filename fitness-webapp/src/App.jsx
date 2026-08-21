@@ -167,10 +167,7 @@ function LoginScreen({ onEnter }) {
             <div key={b.title} className="fp-card p-5">
               <div
                 className="w-11 h-11 rounded-full flex items-center justify-center mb-3"
-                style={{
-                  background: "radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--accent) 55%, white) 0%, var(--accent) 50%, var(--accent-2) 100%)",
-                  boxShadow: "0 4px 12px color-mix(in srgb, var(--accent) 40%, transparent)",
-                }}
+                style={{ background: "var(--accent)", boxShadow: "0 4px 10px rgba(0,0,0,0.18)" }}
               >
                 <b.icon size={19} color="var(--accent-ink)" />
               </div>
@@ -330,10 +327,7 @@ function SubscribeGate({ client, onPaid }) {
       <div className="fp-card p-7 w-full max-w-sm text-center">
         <div
           className="w-12 h-12 rounded-full mx-auto flex items-center justify-center mb-4"
-          style={{
-            background: "radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--accent) 55%, white) 0%, var(--accent) 50%, var(--accent-2) 100%)",
-            boxShadow: "0 4px 14px color-mix(in srgb, var(--accent) 40%, transparent)",
-          }}
+          style={{ background: "var(--accent)", boxShadow: "0 4px 10px rgba(0,0,0,0.18)" }}
         >
           <Sparkles size={20} color="var(--accent-ink)" />
         </div>
@@ -761,7 +755,10 @@ function ClientHome({ client, onLogout, authUserId, theme, setTheme, palette, se
         {tab === "nutrition" && <NutritionTab client={client} onClientUpdated={onClientUpdated} />}
         {tab === "progress" && <ProgressTab client={client} />}
         {tab === "chat" && isVip && (
-          <ChatPanel clientId={client.id} currentSender={client.name} senderRole="client" authUserId={authUserId} />
+          <ChatPanel
+            clientId={client.id} currentSender={client.name} senderRole="client" authUserId={authUserId}
+            onBack={() => setTab("today")} headerTitle="Чат с тренером"
+          />
         )}
         {tab === "profile" && (
           <div className="px-4">
@@ -898,7 +895,10 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
       ) : tab === "periodization" ? (
         <PeriodizationPanel client={client} />
       ) : tab === "chat" && isVip ? (
-        <ChatPanel clientId={client.id} currentSender={trainer.name} senderRole="trainer" authUserId={trainer.auth_user_id} />
+        <ChatPanel
+          clientId={client.id} currentSender={trainer.name} senderRole="trainer" authUserId={trainer.auth_user_id}
+          onBack={() => setTab("workouts")} headerTitle={client.name}
+        />
       ) : (
         <>
           {assignMode === "custom" ? (
