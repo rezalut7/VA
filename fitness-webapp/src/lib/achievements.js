@@ -20,15 +20,15 @@ export function computeStreak(sessions) {
 }
 
 export const ACHIEVEMENTS = [
-  { key: "first_workout", title: "Первая тренировка", desc: "Завершите свою первую тренировку", icon: "🏁", check: (d) => d.sessions.length >= 1 },
-  { key: "streak_7", title: "Неделя подряд", desc: "7 дней подряд с тренировкой", icon: "🔥", check: (d) => d.streak >= 7 },
-  { key: "streak_30", title: "Месяц без пропусков", desc: "30 дней подряд с тренировкой", icon: "⚡", check: (d) => d.streak >= 30 },
-  { key: "workouts_10", title: "10 тренировок", desc: "Завершите 10 тренировок", icon: "💪", check: (d) => d.sessions.length >= 10 },
-  { key: "workouts_50", title: "50 тренировок", desc: "Завершите 50 тренировок", icon: "🏋️", check: (d) => d.sessions.length >= 50 },
-  { key: "workouts_100", title: "100 тренировок", desc: "Завершите 100 тренировок", icon: "🏆", check: (d) => d.sessions.length >= 100 },
-  { key: "first_checkin", title: "Первый чек-ин", desc: "Отправьте первый еженедельный чек-ин", icon: "📋", check: (d) => d.checkins.length >= 1 },
-  { key: "checkins_10", title: "10 чек-инов", desc: "Регулярность на высоте — 10 чек-инов", icon: "📈", check: (d) => d.checkins.length >= 10 },
-  { key: "goal_reached", title: "Цель достигнута", desc: "Дойдите до цели хотя бы по одному упражнению", icon: "🎯", check: (d) => d.goalReached },
+  { key: "first_workout", title: "Первая тренировка", desc: "Завершите свою первую тренировку", icon: "Flag", check: (d) => d.sessions.length >= 1 },
+  { key: "streak_7", title: "Неделя подряд", desc: "7 дней подряд с тренировкой", icon: "Flame", check: (d) => d.streak >= 7 },
+  { key: "streak_30", title: "Месяц без пропусков", desc: "30 дней подряд с тренировкой", icon: "Zap", check: (d) => d.streak >= 30 },
+  { key: "workouts_10", title: "10 тренировок", desc: "Завершите 10 тренировок", icon: "Dumbbell", check: (d) => d.sessions.length >= 10 },
+  { key: "workouts_50", title: "50 тренировок", desc: "Завершите 50 тренировок", icon: "Medal", check: (d) => d.sessions.length >= 50 },
+  { key: "workouts_100", title: "100 тренировок", desc: "Завершите 100 тренировок", icon: "Trophy", check: (d) => d.sessions.length >= 100 },
+  { key: "first_checkin", title: "Первый чек-ин", desc: "Отправьте первый еженедельный чек-ин", icon: "ClipboardCheck", check: (d) => d.checkins.length >= 1 },
+  { key: "checkins_10", title: "10 чек-инов", desc: "Регулярность на высоте — 10 чек-инов", icon: "TrendingUp", check: (d) => d.checkins.length >= 10 },
+  { key: "goal_reached", title: "Цель достигнута", desc: "Дойдите до цели хотя бы по одному упражнению", icon: "Target", check: (d) => d.goalReached },
 ];
 
 export function checkNewAchievements(data, alreadyEarnedKeys) {
