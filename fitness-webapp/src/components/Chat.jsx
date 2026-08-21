@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Send, MessageCircle, Paperclip, X } from "lucide-react";
+import { Send, MessageCircle, Paperclip, ChevronLeft } from "lucide-react";
 import {
   fetchChatMessages, sendChatMessage, subscribeToChatMessages,
   markChatRead, fetchTrainerInbox, uploadChatAttachment, getSignedFileUrl,
@@ -7,7 +7,6 @@ import {
 } from "../lib/api";
 
 const QUICK_EMOJI = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
-const NAV_REST_BOTTOM = "calc(78px + env(safe-area-inset-bottom, 0px))";
 
 function formatTime(iso) {
   return new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
@@ -20,27 +19,6 @@ function dateLabel(iso) {
   if (sameDay(d, today)) return "Сегодня";
   if (sameDay(d, yest)) return "Вчера";
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
-}
-
-// Точная высота клавиатуры = разница между полной высотой окна (не меняется,
-// т.к. в index.html убран interactive-widget=resizes-content — поэтому нижнее
-// меню приложения и не двигается) и видимой visualViewport (которая всегда
-// корректно сжимается под клавиатуру). Поле ввода следует именно за ней.
-function useKeyboardHeight() {
-  const [height, setHeight] = useState(0);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const handler = () => {
-      const kb = window.innerHeight - vv.height - vv.offsetTop;
-      setHeight(Math.max(0, Math.round(kb)));
-    };
-    vv.addEventListener("resize", handler);
-    vv.addEventListener("scroll", handler);
-    handler();
-    return () => { vv.removeEventListener("resize", handler); vv.removeEventListener("scroll", handler); };
-  }, []);
-  return height;
 }
 
 function ChatAttachment({ path, type }) {
@@ -67,8 +45,8 @@ function ReactionBar({ messageId, reactions, authUserId, onToggle }) {
   return (
     <div className="flex gap-1 mt-1 flex-wrap">
       {Object.entries(grouped).map(([emoji, count]) => (
-        <button type="button"
-          key={emoji}
+        <button
+          type="button" key={emoji}
           onClick={() => onToggle(messageId, emoji)}
           className="text-xs flex items-center gap-0.5 px-1.5 py-0.5"
           style={{
@@ -81,7 +59,13 @@ function ReactionBar({ messageId, reactions, authUserId, onToggle }) {
   );
 }
 
-export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
+// Полноэкранный диалог, как в WhatsApp/Telegram: своя шапка со стрелкой назад,
+// список сообщений (растягивается) и поле ввода — всё внутри одной flex-колонки
+// высотой 100dvh. Строка ввода не "плавает" отдельно и не считает клавиатуру
+// вручную через JS — она просто последний элемент колонки, а сама колонка
+// нативно сжимается под клавиатуру (dvh-юниты умеют это сами, в отличие от
+// position:fixed + bottom:0, который и создавал все прошлые баги).
+export function ChatPanel({ clientId, currentSender, senderRole, authUserId, onBack, headerTitle }) {
   const [messages, setMessages] = useState([]);
   const [reactions, setReactions] = useState([]);
   const [text, setText] = useState("");
@@ -90,7 +74,6 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
   const [uploading, setUploading] = useState(false);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
-  const keyboardHeight = useKeyboardHeight();
 
   useEffect(() => {
     setLoading(true);
@@ -147,85 +130,95 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
     await toggleChatReaction(messageId, authUserId, emoji);
   };
 
-  if (loading) return <p className="text-sm px-4" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>;
-
-  const inputBottom = keyboardHeight > 40 ? keyboardHeight : NAV_REST_BOTTOM;
-
   return (
-    <div>
+    <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "var(--bg)", height: "100dvh", display: "flex", flexDirection: "column" }}>
       <div
-        className="px-4 space-y-1 fp-scroll"
-        style={{ paddingBottom: `calc(${keyboardHeight > 40 ? `${keyboardHeight}px` : NAV_REST_BOTTOM} + 76px)` }}
+        className="flex items-center gap-3 px-3"
+        style={{
+          flexShrink: 0, paddingTop: "max(env(safe-area-inset-top, 0px), 14px)", paddingBottom: 12,
+          borderBottom: "1px solid var(--line)", background: "var(--bg)",
+        }}
       >
-        {messages.length === 0 && (
-          <p className="text-sm text-center mt-8" style={{ color: "var(--ink-soft)" }}>Сообщений пока нет — напишите первым.</p>
-        )}
-        {messages.map((m, i) => {
-          const mine = m.from_name === currentSender;
-          const showDateSep = i === 0 || dateLabel(m.created_at) !== dateLabel(messages[i - 1].created_at);
-          const msgReactions = reactions.filter((r) => r.message_id === m.id);
-          return (
-            <React.Fragment key={m.id}>
-              {showDateSep && (
-                <div className="text-center my-3">
-                  <span className="text-[11px] px-2 py-0.5" style={{ color: "var(--ink-soft)", background: "var(--bg)", borderRadius: 8 }}>
-                    {dateLabel(m.created_at)}
-                  </span>
-                </div>
-              )}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start", marginBottom: 6 }}>
-                <div
-                  onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)}
-                  className="p-2.5"
-                  style={{
-                    maxWidth: "75%", borderRadius: 16, cursor: "pointer",
-                    borderBottomRightRadius: mine ? 5 : 16,
-                    borderBottomLeftRadius: mine ? 16 : 5,
-                    background: mine ? "#0A84FF" : "var(--surface)",
-                    color: mine ? "#fff" : "var(--ink)",
-                    border: mine ? "none" : "1px solid var(--line)",
-                    boxShadow: mine ? "none" : "0 1px 2px rgba(0,0,0,0.04)",
-                  }}
-                >
-                  {!mine && <div className="text-xs font-semibold mb-0.5" style={{ opacity: 0.6 }}>{m.from_name}</div>}
-                  {m.attachment_url && (
-                    <div style={{ marginBottom: m.text ? 6 : 0 }}>
-                      <ChatAttachment path={m.attachment_url} type={m.attachment_type} />
-                    </div>
-                  )}
-                  {m.text && <div className="text-sm" style={{ lineHeight: 1.35 }}>{m.text}</div>}
-                  <div className="text-[10px] mt-1" style={{ opacity: 0.6, textAlign: "right" }}>{formatTime(m.created_at)}</div>
-                </div>
+        <button type="button" onClick={onBack} className="flex items-center justify-center" style={{ width: 32, height: 32 }}>
+          <ChevronLeft size={24} color="var(--ink)" />
+        </button>
+        <span className="font-semibold" style={{ fontSize: 16 }}>{headerTitle}</span>
+      </div>
 
-                {pickerFor === m.id && (
-                  <div className="flex gap-1.5 mt-1.5 p-1.5 fp-card" style={{ background: "var(--surface)" }}>
-                    {QUICK_EMOJI.map((e) => (
-                      <button type="button" key={e} onClick={() => handleToggleReaction(m.id, e)} style={{ fontSize: 18, lineHeight: 1 }}>{e}</button>
-                    ))}
+      <div className="flex-1 overflow-y-auto px-4 pt-3 fp-scroll">
+        {loading ? (
+          <p className="text-sm text-center mt-8" style={{ color: "var(--ink-soft)" }}>Загрузка…</p>
+        ) : messages.length === 0 ? (
+          <p className="text-sm text-center mt-8" style={{ color: "var(--ink-soft)" }}>Сообщений пока нет — напишите первым.</p>
+        ) : (
+          messages.map((m, i) => {
+            const mine = m.from_name === currentSender;
+            const showDateSep = i === 0 || dateLabel(m.created_at) !== dateLabel(messages[i - 1].created_at);
+            const msgReactions = reactions.filter((r) => r.message_id === m.id);
+            return (
+              <React.Fragment key={m.id}>
+                {showDateSep && (
+                  <div className="text-center my-3">
+                    <span className="text-[11px] px-2 py-0.5" style={{ color: "var(--ink-soft)", background: "var(--surface)", borderRadius: 8 }}>
+                      {dateLabel(m.created_at)}
+                    </span>
                   </div>
                 )}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: mine ? "flex-end" : "flex-start", marginBottom: 6 }}>
+                  <div
+                    onClick={() => setPickerFor(pickerFor === m.id ? null : m.id)}
+                    className="p-2.5"
+                    style={{
+                      maxWidth: "75%", borderRadius: 16, cursor: "pointer",
+                      borderBottomRightRadius: mine ? 5 : 16,
+                      borderBottomLeftRadius: mine ? 16 : 5,
+                      background: mine ? "#0A84FF" : "var(--surface)",
+                      color: mine ? "#fff" : "var(--ink)",
+                      border: mine ? "none" : "1px solid var(--line)",
+                      boxShadow: mine ? "none" : "0 1px 2px rgba(0,0,0,0.04)",
+                    }}
+                  >
+                    {!mine && <div className="text-xs font-semibold mb-0.5" style={{ opacity: 0.6 }}>{m.from_name}</div>}
+                    {m.attachment_url && (
+                      <div style={{ marginBottom: m.text ? 6 : 0 }}>
+                        <ChatAttachment path={m.attachment_url} type={m.attachment_type} />
+                      </div>
+                    )}
+                    {m.text && <div className="text-sm" style={{ lineHeight: 1.35 }}>{m.text}</div>}
+                    <div className="text-[10px] mt-1" style={{ opacity: 0.6, textAlign: "right" }}>{formatTime(m.created_at)}</div>
+                  </div>
 
-                <ReactionBar messageId={m.id} reactions={msgReactions} authUserId={authUserId} onToggle={handleToggleReaction} />
-              </div>
-            </React.Fragment>
-          );
-        })}
+                  {pickerFor === m.id && (
+                    <div className="flex gap-1.5 mt-1.5 p-1.5 fp-card" style={{ background: "var(--surface)" }}>
+                      {QUICK_EMOJI.map((e) => (
+                        <button type="button" key={e} onClick={() => handleToggleReaction(m.id, e)} style={{ fontSize: 18, lineHeight: 1 }}>{e}</button>
+                      ))}
+                    </div>
+                  )}
+
+                  <ReactionBar messageId={m.id} reactions={msgReactions} authUserId={authUserId} onToggle={handleToggleReaction} />
+                </div>
+              </React.Fragment>
+            );
+          })
+        )}
         <div ref={bottomRef} />
       </div>
 
       <div
-        className="flex items-center gap-2 px-4 py-3"
+        className="flex items-center gap-2 px-3 py-2.5"
         style={{
-          position: "fixed", left: 0, right: 0, bottom: inputBottom, zIndex: 45, transition: "bottom 0.12s ease",
-          background: "var(--surface)", borderTop: "1px solid var(--line)",
+          flexShrink: 0, borderTop: "1px solid var(--line)", background: "var(--surface)",
+          paddingBottom: "max(env(safe-area-inset-bottom, 0px), 10px)",
         }}
       >
         <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={handleFilePick} style={{ display: "none" }} />
-        <button type="button"
+        <button
+          type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
           className="flex items-center justify-center flex-shrink-0 disabled:opacity-40"
-          style={{ width: 34, height: 34 }}
+          style={{ width: 32, height: 32 }}
         >
           <Paperclip size={18} color="var(--ink-soft)" />
         </button>
@@ -237,7 +230,8 @@ export function ChatPanel({ clientId, currentSender, senderRole, authUserId }) {
           disabled={uploading}
           onChange={(e) => setText(e.target.value)}
         />
-        <button type="button"
+        <button
+          type="button"
           className="flex items-center justify-center flex-shrink-0"
           style={{ width: 34, height: 34, borderRadius: "50%", background: text.trim() ? "#0A84FF" : "var(--line)", color: "#fff", border: "none" }}
           onClick={submit}
@@ -270,8 +264,8 @@ export function TrainerInbox({ trainer, clients, onOpenChat }) {
   return (
     <div className="px-4 space-y-2">
       {rows.map(({ client, lastMessage, unreadCount }) => (
-        <button type="button"
-          key={client.id}
+        <button
+          type="button" key={client.id}
           onClick={() => onOpenChat(client)}
           className="fp-card w-full p-3 flex items-center gap-3 text-left"
         >
