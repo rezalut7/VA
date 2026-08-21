@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Dumbbell, Apple, TrendingUp, User, CheckCircle2, LogOut, ChevronLeft,
   Users, Sparkles, MessageCircle, LayoutGrid, Bell, Copy, Layers, Trophy, CalendarDays, X, BookOpen, Trash2, Plus,
@@ -31,16 +31,22 @@ const PALETTE_OPTIONS = [
 const PLANS = [
   {
     id: "basic", name: "Дневник", price: 990, priceLabel: "990 ₽ / мес",
+    tagline: "Самостоятельный трекинг без наставника",
+    audience: "Для тех, кто уже разобрался с техникой и питанием и хочет просто вести дневник — фиксировать тренировки и КБЖУ в одном месте, без персонального сопровождения тренера.",
     features: ["Дневник питания с подсчётом КБЖУ", "Журнал тренировок", "Без персонального тренера"],
     trainerIds: [],
   },
   {
     id: "plan", name: "Индивидуальный план", price: 2990, priceLabel: "2 990 ₽ / мес",
+    tagline: "Готовый план, дальше сами",
+    audience: "Для тех, кому нужна структура и понятная точка отсчёта — тренер составит программу тренировок и питания на месяц вперёд, а темп и дисциплину вы держите сами.",
     features: ["Тренировочный план на месяц", "План питания на месяц", "Дневник питания и тренировок"],
     trainerIds: ["t1", "t2"],
   },
   {
     id: "vip", name: "VIP-ведение", priceMonthly: 19900, price3m: 49900,
+    tagline: "Личное сопровождение каждый день",
+    audience: "Для тех, кто хочет результат без гаданий и не готов ждать неделями обратной связи — тренер на связи в чате, корректирует план по ходу и следит за прогрессом лично.",
     features: ["Личный чат поддержки с тренерами", "Отслеживание прогресса", "Корректировки плана в течение месяца"],
     trainerIds: ["t1", "t2"],
   },
@@ -68,6 +74,46 @@ const DAY_OPTIONS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 function Chip({ children, style }) {
   return <span className="fp-chip" style={style}>{children}</span>;
+}
+
+// Свайп влево открывает красную кнопку удаления за карточкой (как в почте
+// на iOS) — обычная кнопка-корзина рядом остаётся для тех, кто не привык
+// к жесту, свайп просто более быстрый способ сделать то же самое.
+function SwipeToDelete({ onDelete, children }) {
+  const [dragX, setDragX] = useState(0);
+  const dragging = useRef(false);
+  const startX = useRef(null);
+
+  const onTouchStart = (e) => { startX.current = e.touches[0].clientX; dragging.current = true; };
+  const onTouchMove = (e) => {
+    if (startX.current === null) return;
+    const dx = e.touches[0].clientX - startX.current;
+    if (dx < 0) setDragX(Math.max(dx, -76));
+  };
+  const onTouchEnd = () => {
+    dragging.current = false;
+    startX.current = null;
+    setDragX((x) => (x < -38 ? -76 : 0));
+  };
+
+  return (
+    <div style={{ position: "relative", overflow: "hidden", borderRadius: 16 }}>
+      <div
+        className="flex items-center justify-center"
+        style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 76, background: "var(--danger)" }}
+      >
+        <button type="button" onClick={() => { onDelete(); setDragX(0); }}>
+          <Trash2 size={19} color="#fff" />
+        </button>
+      </div>
+      <div
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+        style={{ transform: `translateX(${dragX}px)`, transition: dragging.current ? "none" : "transform 0.2s ease" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function PageHeader({ eyebrow, title, subtitle, onLogout }) {
@@ -146,7 +192,13 @@ function LoginScreen({ onEnter }) {
 
   return (
     <div className="min-h-screen">
-      <div className="flex flex-col items-center justify-center px-4 pt-16 pb-12 text-center">
+      <div className="flex items-center justify-end px-4 fp-safe-top" style={{ paddingBottom: 8 }}>
+        <button type="button" onClick={() => onEnter("login")} className="text-sm font-semibold px-4 py-2" style={{ color: "var(--ink)" }}>
+          Войти
+        </button>
+      </div>
+
+      <div className="flex flex-col items-center justify-center px-4 pt-6 pb-12 text-center">
         <Chip style={{ background: "var(--accent)", color: "var(--accent-ink)", marginBottom: 18 }}>
           <Dumbbell size={13} /> ОНЛАЙН-ТРЕНИРОВКИ
         </Chip>
@@ -155,14 +207,14 @@ function LoginScreen({ onEnter }) {
           Персональный тренер, дневник питания и честный прогресс — в одном приложении.
           Не абстрактная программа из интернета, а план под вас, который меняется по ходу дела.
         </p>
-        <button onClick={onEnter} className="fp-btn fp-btn-accent px-8 py-3.5 text-base">
+        <button type="button" onClick={() => onEnter("register")} className="fp-btn fp-btn-accent px-8 py-3.5 text-base">
           Начать заниматься
         </button>
         <p className="text-xs mt-3" style={{ color: "var(--ink-soft)" }}>Регистрация в приложении — не в мессенджере и не через таблички</p>
       </div>
 
       <div className="px-4 pb-16 max-w-4xl mx-auto">
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid sm:grid-cols-2 gap-4 mb-12">
           {benefits.map((b) => (
             <div key={b.title} className="fp-card p-5">
               <div
@@ -177,20 +229,57 @@ function LoginScreen({ onEnter }) {
           ))}
         </div>
 
-        <div className="fp-card p-6 mt-4 text-center" style={{ background: "var(--solid-dark)", color: "#fff" }}>
-          <div className="fp-display text-xl font-semibold mb-2">Тарифы от 990 ₽/мес</div>
-          <p className="text-sm mb-4" style={{ opacity: 0.8 }}>
-            От самостоятельного дневника питания до полного VIP-сопровождения с чатом с тренером — выбираете при регистрации.
-          </p>
-          <button onClick={onEnter} className="fp-btn fp-btn-accent px-6 py-2.5">Выбрать тариф</button>
+        <div className="text-center mb-6">
+          <h2 className="fp-display text-2xl md:text-3xl font-bold mb-2">Выберите свой формат</h2>
+          <p className="text-sm" style={{ color: "var(--ink-soft)" }}>От самостоятельного дневника до полного личного сопровождения — растёте вы, растёт и уровень поддержки.</p>
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-4">
+          {PLANS.map((p) => {
+            const isVip = p.id === "vip";
+            return (
+              <div
+                key={p.id}
+                className="fp-card p-5 flex flex-col"
+                style={isVip ? { borderColor: "var(--accent)", borderWidth: 1.5 } : undefined}
+              >
+                {isVip && (
+                  <Chip style={{ background: "var(--accent)", color: "var(--accent-ink)", alignSelf: "flex-start", marginBottom: 10 }}>
+                    Максимум результата
+                  </Chip>
+                )}
+                <div className="fp-display text-lg font-bold mb-0.5">{p.name}</div>
+                <p className="text-xs mb-3" style={{ color: "var(--accent)" }}>{p.tagline}</p>
+                <div className="fp-display text-2xl font-bold mb-3">
+                  {isVip ? "19 900 ₽" : p.priceLabel.split(" / ")[0] + " ₽"}
+                  <span className="text-xs font-normal" style={{ color: "var(--ink-soft)" }}> / мес</span>
+                </div>
+                <p className="text-xs mb-4" style={{ color: "var(--ink-soft)", lineHeight: 1.5 }}>{p.audience}</p>
+                <ul className="text-xs space-y-1.5 mb-5" style={{ flex: 1 }}>
+                  {p.features.map((f) => (
+                    <li key={f} className="flex items-start gap-1.5">
+                      <CheckCircle2 size={13} color="var(--accent-2)" style={{ marginTop: 1, flexShrink: 0 }} /> {f}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => onEnter("register")}
+                  className={isVip ? "fp-btn fp-btn-accent w-full py-2.5 text-sm" : "fp-btn fp-btn-outline w-full py-2.5 text-sm"}
+                >
+                  Выбрать
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
   );
 }
 
-function ClientEntryScreen({ onBack, onLoggedIn }) {
-  const [mode, setMode] = useState("register");
+function ClientEntryScreen({ onBack, onLoggedIn, initialMode }) {
+  const [mode, setMode] = useState(initialMode || "register");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -944,8 +1033,8 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
                 const totalCount = w.workout_exercises.length;
                 const notCompleted = totalCount === 0 || doneCount < totalCount;
                 const weekMeta = WEEK_TYPE_META[w.periodization_week];
-                return (
-                  <div key={w.id} className="fp-card p-4">
+                const card = (
+                  <div className="fp-card p-4">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="font-semibold truncate">{w.title}</div>
@@ -954,7 +1043,7 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <Chip style={{ background: "var(--bg)", color: "var(--ink-soft)" }}>{doneCount}/{totalCount}</Chip>
                         {notCompleted && (
-                          <button onClick={() => handleDeleteWorkout(w.id)} title="Удалить (клиент ещё не прошёл)">
+                          <button type="button" onClick={() => handleDeleteWorkout(w.id)} title="Удалить (клиент ещё не прошёл)">
                             <Trash2 size={15} color="var(--danger)" />
                           </button>
                         )}
@@ -973,6 +1062,11 @@ function TrainerClientDetail({ client: initialClient, trainer, onBack, initialTa
                         </li>
                       ))}
                     </ul>
+                  </div>
+                );
+                return (
+                  <div key={w.id}>
+                    {notCompleted ? <SwipeToDelete onDelete={() => handleDeleteWorkout(w.id)}>{card}</SwipeToDelete> : card}
                   </div>
                 );
               })}
@@ -1235,6 +1329,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [screen, setScreen] = useState("login");
+  const [entryMode, setEntryMode] = useState("register");
   const [trainer, setTrainer] = useState(null);
   const [client, setClient] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem("fp-theme") || "dark");
@@ -1282,8 +1377,8 @@ export default function App() {
     // Один общий вход: и клиент, и тренер попадают сюда и вводят свою почту —
     // после входа роль определяется автоматически (resolveRole выше), без
     // отдельной кнопки «Я тренер». Тренерские аккаунты создаются вручную в Supabase.
-    if (screen === "entry") return <ClientEntryScreen onBack={() => setScreen("login")} onLoggedIn={() => {}} />;
-    return <LoginScreen onEnter={() => setScreen("entry")} />;
+    if (screen === "entry") return <ClientEntryScreen onBack={() => setScreen("login")} onLoggedIn={() => {}} initialMode={entryMode} />;
+    return <LoginScreen onEnter={(mode) => { setEntryMode(mode || "register"); setScreen("entry"); }} />;
   }
 
   if (trainer) return <TrainerHome trainer={trainer} clients={trainer.clients} onLogout={handleLogout} authUserId={session.user.id} theme={theme} setTheme={setTheme} palette={palette} setPalette={setPalette} onTrainerUpdated={(updated) => setTrainer((prev) => ({ ...prev, ...updated }))} />;
