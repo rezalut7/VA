@@ -1,97 +1,95 @@
 // Open Food Facts proxy
-//
-// Much simpler than the FatSecret one — Open Food Facts is a free, keyless public
-// API, so this server does NOT hold any secret. Its only two jobs are:
-//   1. Add correct CORS headers so the browser (running inside the Claude artifact
-//      sandbox, or your own future frontend) is allowed to call it.
-//   2. Shape the response into exactly what the frontend already expects (see
-//      searchFoods/getFoodDetails in the React app) so swapping the URL is a
-//      one-line change once this is deployed.
-//
-//   GET /api/food/search?q=молоко   -> [{ id, name }, ...]
-//   GET /api/food/:id               -> { id, name, servings: [{ id, label, kcal, protein, carbs, fat }] }
-//
-// "id" here is the product's barcode (Open Food Facts calls it "code").
-
 const express = require("express");
 const cors = require("cors");
 
 const app = express();
-app.use(cors()); // lock this down to your real frontend origin before going live
-
 const PORT = process.env.PORT || 3002;
-// Open Food Facts asks every integration to send a descriptive User-Agent.
-const USER_AGENT = process.env.APP_USER_AGENT || "FitnessPlatformPrototype/1.0 (contact@example.com)";
+const USER_AGENT = process.env.APP_USER_AGENT || "VA/1.0 (contact@example.com)";
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.disable("x-powered-by");
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Origin not allowed by CORS"));
+  },
+}));
 
 app.get("/api/food/search", async (req, res) => {
-  const q = (req.query.q || "").trim();
+  const q = String(req.query.q || "").trim().slice(0, 120);
   if (!q) return res.json([]);
+
   try {
     const url = new URL("https://world.openfoodfacts.org/api/v2/search");
     url.searchParams.set("search_terms", q);
     url.searchParams.set("page_size", "8");
     url.searchParams.set("fields", "code,product_name,product_name_ru");
 
-    const r = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-    if (!r.ok) throw new Error(`OFF search failed (${r.status})`);
-    const data = await r.json();
+    const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+    if (!response.ok) throw new Error(`OFF search failed (${response.status})`);
+    const data = await response.json();
 
     const products = (data.products || [])
-      .map((p) => ({ id: p.code, name: p.product_name_ru || p.product_name }))
-      .filter((p) => p.id && p.name);
+      .map((product) => ({ id: product.code, name: product.product_name_ru || product.product_name }))
+      .filter((product) => product.id && product.name);
 
-    res.json(products);
-  } catch (err) {
-    console.error(err);
-    res.status(502).json({ error: "food_search_failed" });
+    return res.json(products);
+  } catch (error) {
+    console.error("food search failed", error);
+    return res.status(502).json({ error: "food_search_failed" });
   }
 });
 
 app.get("/api/food/:id", async (req, res) => {
+  const id = String(req.params.id || "").trim();
+  if (!id || id.length > 64) return res.status(400).json({ error: "invalid_id" });
+
   try {
-    const url = new URL(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(req.params.id)}.json`);
+    const url = new URL(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(id)}.json`);
     url.searchParams.set("fields", "product_name,product_name_ru,nutriments,serving_size");
 
-    const r = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-    if (!r.ok) throw new Error(`OFF product lookup failed (${r.status})`);
-    const data = await r.json();
-    const p = data.product;
-    if (!p) return res.status(404).json({ error: "not_found" });
+    const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+    if (!response.ok) throw new Error(`OFF product lookup failed (${response.status})`);
+    const data = await response.json();
+    const product = data.product;
+    if (!product) return res.status(404).json({ error: "not_found" });
 
-    const n = p.nutriments || {};
-    const round1 = (x) => Math.round(x * 10) / 10;
+    const nutrients = product.nutriments || {};
+    const round1 = (value) => Math.round(Number(value || 0) * 10) / 10;
     const servings = [];
 
-    if (typeof n["energy-kcal_100g"] === "number") {
+    if (Number.isFinite(nutrients["energy-kcal_100g"])) {
       servings.push({
-        id: `${req.params.id}-100g`,
-        label: "100 г",
-        kcal: round1(n["energy-kcal_100g"] || 0),
-        protein: round1(n["proteins_100g"] || 0),
-        carbs: round1(n["carbohydrates_100g"] || 0),
-        fat: round1(n["fat_100g"] || 0),
+        id: `${id}-100g`, label: "100 г",
+        kcal: round1(nutrients["energy-kcal_100g"]), protein: round1(nutrients["proteins_100g"]),
+        carbs: round1(nutrients["carbohydrates_100g"]), fat: round1(nutrients["fat_100g"]),
       });
     }
-    if (p.serving_size && typeof n["energy-kcal_serving"] === "number") {
+
+    if (product.serving_size && Number.isFinite(nutrients["energy-kcal_serving"])) {
       servings.push({
-        id: `${req.params.id}-serving`,
-        label: p.serving_size,
-        kcal: round1(n["energy-kcal_serving"] || 0),
-        protein: round1(n["proteins_serving"] || 0),
-        carbs: round1(n["carbohydrates_serving"] || 0),
-        fat: round1(n["fat_serving"] || 0),
+        id: `${id}-serving`, label: product.serving_size,
+        kcal: round1(nutrients["energy-kcal_serving"]), protein: round1(nutrients["proteins_serving"]),
+        carbs: round1(nutrients["carbohydrates_serving"]), fat: round1(nutrients["fat_serving"]),
       });
     }
 
     if (servings.length === 0) return res.status(404).json({ error: "no_nutrition_data" });
-
-    res.json({ id: req.params.id, name: p.product_name_ru || p.product_name, servings });
-  } catch (err) {
-    console.error(err);
-    res.status(502).json({ error: "food_details_failed" });
+    return res.json({ id, name: product.product_name_ru || product.product_name || `Продукт ${id}`, servings });
+  } catch (error) {
+    console.error("food details failed", error);
+    return res.status(502).json({ error: "food_details_failed" });
   }
 });
 
-app.get("/health", (req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => res.json({ ok: true }));
+app.use((_req, res) => res.status(404).json({ error: "not_found" }));
+app.use((error, _req, res, _next) => {
+  console.error("request failed", error);
+  res.status(500).json({ error: "request_failed" });
+});
 
 app.listen(PORT, () => console.log(`Open Food Facts proxy listening on :${PORT}`));
