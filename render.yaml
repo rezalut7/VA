@@ -3,8 +3,11 @@ services:
     name: openfoodfacts-proxy
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: npm ci --omit=dev
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: APP_USER_AGENT
-        value: FitnessPlatformPrototype/1.0 (contact@example.com)
+        value: VA/1.0 (contact@example.com)
+      - key: ALLOWED_ORIGINS
+        sync: false
