@@ -8,3 +8,9 @@ services:
     envVars:
       - key: APP_USER_AGENT
         value: FitnessPlatformPrototype/1.0 (contact@example.com)
+      - key: OPENAI_MODEL
+        value: gpt-6-luna
+      - key: OPENAI_TIMEOUT_MS
+        value: "3600"
+      - key: OPENAI_API_KEY
+        sync: false
