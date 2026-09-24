@@ -1,0 +1,7 @@
+FROM alpine:edge
+
+RUN apk add --no-cache ollama
+
+EXPOSE 11434
+ENTRYPOINT ["ollama"]
+CMD ["serve"]

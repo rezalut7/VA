@@ -16,7 +16,9 @@ services:
       ollama:
         condition: service_started
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
     restart: unless-stopped
     volumes:
       - oracle_ollama:/root/.ollama
