@@ -24,6 +24,7 @@ services:
       - oracle_ollama:/root/.ollama
     environment:
       OLLAMA_KEEP_ALIVE: 30m
+      OLLAMA_HOST: 0.0.0.0:11434
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
