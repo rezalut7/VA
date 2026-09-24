@@ -14,6 +14,8 @@ export const config = {
   sessionSecret: process.env.SESSION_SECRET || "dev-only-change-before-production",
   botToken: process.env.TELEGRAM_BOT_TOKEN || "",
   botUsername: process.env.TELEGRAM_BOT_USERNAME || "madam_agrippina_bot",
+  telegramRelayUrl: (process.env.TELEGRAM_RELAY_URL || "").replace(/\/$/, ""),
+  telegramRelaySecret: process.env.TELEGRAM_RELAY_SECRET || "",
   webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || "",
   cronSecret: process.env.CRON_SECRET || "",
   openaiKey: process.env.OPENAI_API_KEY || "",
