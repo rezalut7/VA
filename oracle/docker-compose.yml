@@ -13,6 +13,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      ollama:
+        condition: service_started
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - oracle_ollama:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -30,3 +39,4 @@ services:
       retries: 10
 volumes:
   oracle_postgres:
+  oracle_ollama:

@@ -37,7 +37,7 @@ async function activateReferralAndNotify(userId) {
 
 app.get("/health",asyncRoute(async(req,res)=>{
   await query("SELECT 1");
-  res.json({ok:true,app:"madam-agrippina-ai",bot:config.botUsername,ai:Boolean(config.openaiKey||(config.aiRelayUrl&&config.aiRelaySecret)),model:config.openaiModel});
+  res.json({ok:true,app:"madam-agrippina-ai",bot:config.botUsername,ai:Boolean(config.openaiKey||(config.aiRelayUrl&&config.aiRelaySecret)||config.ollamaUrl),model:config.ollamaUrl?`${config.openaiModel} + ${config.ollamaModel} local`:config.openaiModel});
 }));
 
 app.post("/api/auth/telegram",asyncRoute(async(req,res)=>{

@@ -54,8 +54,7 @@ function extract(data) {
   return (data.output||[]).flatMap(item=>item.content||[]).filter(item=>item.type==="output_text").map(item=>item.text).join("");
 }
 
-async function requestModel(body) {
-  if(!config.openaiKey&&!(config.aiRelayUrl&&config.aiRelaySecret)) return null;
+async function requestOpenAi(body) {
   const direct=Boolean(config.openaiKey);
   const url=direct?"https://api.openai.com/v1/responses":`${config.aiRelayUrl}/internal/oracle`;
   const headers={"Content-Type":"application/json"};
@@ -69,6 +68,42 @@ async function requestModel(body) {
     if(!response.ok) throw new Error(data?.error?.message||data?.error||`AI HTTP ${response.status}`);
     return data;
   } finally { clearTimeout(timer); }
+}
+
+async function requestOllama(body) {
+  if(!config.ollamaUrl) return null;
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),90000);
+  try {
+    const response=await fetch(`${config.ollamaUrl}/api/chat`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:config.ollamaModel,
+        stream:false,
+        messages:[{role:"system",content:body.instructions},{role:"user",content:body.input}],
+        format:body.text?.format?.schema||"json",
+        options:{temperature:0.72,num_predict:body.max_output_tokens||1400,num_ctx:8192},
+        keep_alive:"30m",
+      }),
+      signal:controller.signal,
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(data?.error||`Ollama HTTP ${response.status}`);
+    return {output_text:data?.message?.content||""};
+  } finally { clearTimeout(timer); }
+}
+
+async function requestModel(body) {
+  const openAiReady=config.openaiKey||config.aiRelayUrl&&config.aiRelaySecret;
+  if(openAiReady) {
+    try { return await requestOpenAi(body); }
+    catch(error) {
+      if(!config.ollamaUrl) throw error;
+      console.warn("AI relay unavailable, using local model:",error.message);
+    }
+  }
+  return requestOllama(body);
 }
 
 export function warmAiRelay() {

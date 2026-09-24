@@ -22,6 +22,8 @@ export const config = {
   openaiModel: process.env.OPENAI_MODEL || "gpt-5-mini",
   aiRelayUrl: (process.env.AI_RELAY_URL || "").replace(/\/$/, ""),
   aiRelaySecret: process.env.AI_RELAY_SECRET || "",
+  ollamaUrl: (process.env.OLLAMA_URL || "").replace(/\/$/, ""),
+  ollamaModel: process.env.OLLAMA_MODEL || "qwen2.5:3b",
   adminIds: new Set((process.env.ADMIN_TELEGRAM_IDS || "").split(",").map(x=>x.trim()).filter(Boolean)),
   allowDevAuth: process.env.ALLOW_DEV_AUTH === "true",
   freeDailyRequests: int("FREE_DAILY_REQUESTS", 3),
