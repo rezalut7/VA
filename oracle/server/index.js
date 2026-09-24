@@ -3,9 +3,9 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import cors from "cors";
 import { config } from "./config.js";
-import { createReading } from "./ai.js";
+import { createFollowUp, createReading, warmAiRelay } from "./ai.js";
 import { botApi, signSession, startKeyboard, termsKeyboard, validateInitData, verifySession } from "./telegram.js";
-import { acceptTerms, activateReferral, consumeRequest, publicUser, query, redeemPromo, rewardReferralPurchase, saveReading, transaction, upsertUser } from "./db.js";
+import { acceptTerms, activateReferral, consumeRequest, publicUser, query, readingContext, readingConversation, redeemPromo, rewardReferralPurchase, saveReading, saveReadingExchange, transaction, upsertUser } from "./db.js";
 import { renderShareCard, signShareCard, verifyShareCard } from "./share-card.js";
 
 const app = express();
@@ -37,12 +37,13 @@ async function activateReferralAndNotify(userId) {
 
 app.get("/health",asyncRoute(async(req,res)=>{
   await query("SELECT 1");
-  res.json({ok:true,app:"madam-agrippina-ai",bot:config.botUsername,ai:Boolean(config.openaiKey)});
+  res.json({ok:true,app:"madam-agrippina-ai",bot:config.botUsername,ai:Boolean(config.openaiKey||(config.aiRelayUrl&&config.aiRelaySecret)),model:config.openaiModel});
 }));
 
 app.post("/api/auth/telegram",asyncRoute(async(req,res)=>{
   const {user,startParam}=validateInitData(String(req.body.initData||""));
   const row=await upsertUser(user,startParam);
+  warmAiRelay();
   res.json({token:signSession({userId:row.id,telegramId:row.telegram_id}),user:await publicUser(row.id)});
 }));
 
@@ -52,7 +53,7 @@ app.post("/api/auth/dev",asyncRoute(async(req,res)=>{
   res.json({token:signSession({userId:row.id,telegramId:row.telegram_id}),user:await publicUser(row.id)});
 }));
 
-app.get("/api/me",auth,asyncRoute(async(req,res)=>res.json(await publicUser(req.session.userId))));
+app.get("/api/me",auth,asyncRoute(async(req,res)=>{ warmAiRelay(); res.json(await publicUser(req.session.userId)); }));
 app.post("/api/me/accept-terms",auth,asyncRoute(async(req,res)=>res.json(await acceptTerms(req.session.userId))));
 app.post("/api/promo/redeem",...protectedRoute,asyncRoute(async(req,res)=>res.json(await redeemPromo(req.session.userId,req.body.code))));
 app.post("/api/me/reminder",...protectedRoute,asyncRoute(async(req,res)=>{
@@ -66,7 +67,8 @@ app.get("/api/daily",...protectedRoute,asyncRoute(async(req,res)=>{
     WHERE d.user_id=$1 AND d.card_date=current_date`,[req.session.userId]);
   if(existing.rowCount) return res.json({...existing.rows[0].result,readingId:existing.rows[0].id});
   await consumeRequest(req.session.userId);
-  const result=await createReading("daily",{});
+  const current=await publicUser(req.session.userId);
+  const result=await createReading("daily",{},{firstName:current?.firstName,recentReadings:await readingContext(req.session.userId)});
   const saved=await saveReading(req.session.userId,"daily",result.title,{},result);
   await query("INSERT INTO daily_cards(user_id,reading_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[req.session.userId,saved.id]);
   await activateReferralAndNotify(req.session.userId);
@@ -82,13 +84,13 @@ const validators={
 app.post("/api/readings/:kind",...protectedRoute,asyncRoute(async(req,res)=>{
   const kind=req.params.kind;
   if(!validators[kind]?.(req.body)) return res.status(400).json({error:"invalid_input",message:"Проверьте заполненные поля"});
+  const current=await publicUser(req.session.userId);
   if(kind==="tarot" && ["3","7"].includes(String(req.body.cards))) {
-    const current=await publicUser(req.session.userId);
     if(!current?.premiumUntil || new Date(current.premiumUntil)<=new Date()) return res.status(402).json({error:"premium_required",message:"Расклады на 3 и 7 карт доступны в Premium"});
   }
   await consumeRequest(req.session.userId);
   const input=Object.fromEntries(Object.entries(req.body).map(([k,v])=>[k,String(v).trim().slice(0,2500)]));
-  const result=await createReading(kind,input);
+  const result=await createReading(kind,input,{firstName:current?.firstName,recentReadings:await readingContext(req.session.userId)});
   const saved=await saveReading(req.session.userId,kind,result.title,input,result);
   await activateReferralAndNotify(req.session.userId);
   res.json({...result,readingId:saved.id});
@@ -100,6 +102,17 @@ app.post("/api/readings/:id/share-card",...protectedRoute,asyncRoute(async(req,r
   const signature=signShareCard(req.params.id);
   const base=`${config.publicUrl}/share/cards/${req.params.id}.png?sig=${signature}`;
   res.json({storyUrl:base,downloadUrl:`${base}&download=1`});
+}));
+
+app.post("/api/readings/:id/follow-up",...protectedRoute,asyncRoute(async(req,res)=>{
+  const question=String(req.body.question||"").trim().slice(0,800);
+  if(question.length<3) return res.status(400).json({error:"invalid_question",message:"Напишите уточняющий вопрос"});
+  const reading=await readingConversation(req.params.id,req.session.userId);
+  if(!reading) return res.status(404).json({error:"not_found",message:"Послание не найдено"});
+  await consumeRequest(req.session.userId);
+  const answer=await createFollowUp(reading,question,await readingContext(req.session.userId));
+  await saveReadingExchange(reading.id,question,answer);
+  res.json({answer});
 }));
 
 app.get("/share/cards/:id.png",asyncRoute(async(req,res)=>{

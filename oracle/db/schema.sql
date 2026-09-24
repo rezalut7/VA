@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS readings (
 );
 CREATE INDEX IF NOT EXISTS readings_user_created_idx ON readings(user_id,created_at DESC);
 
+CREATE TABLE IF NOT EXISTS reading_messages (
+  id bigserial PRIMARY KEY,
+  reading_id uuid NOT NULL REFERENCES readings(id) ON DELETE CASCADE,
+  role text NOT NULL CHECK(role IN ('user','assistant')),
+  content text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS reading_messages_reading_idx ON reading_messages(reading_id,id);
+
 CREATE TABLE IF NOT EXISTS usage_daily (
   user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   used_on date NOT NULL DEFAULT current_date,

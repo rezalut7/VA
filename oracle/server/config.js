@@ -20,6 +20,8 @@ export const config = {
   cronSecret: process.env.CRON_SECRET || "",
   openaiKey: process.env.OPENAI_API_KEY || "",
   openaiModel: process.env.OPENAI_MODEL || "gpt-5-mini",
+  aiRelayUrl: (process.env.AI_RELAY_URL || "").replace(/\/$/, ""),
+  aiRelaySecret: process.env.AI_RELAY_SECRET || "",
   adminIds: new Set((process.env.ADMIN_TELEGRAM_IDS || "").split(",").map(x=>x.trim()).filter(Boolean)),
   allowDevAuth: process.env.ALLOW_DEV_AUTH === "true",
   freeDailyRequests: int("FREE_DAILY_REQUESTS", 3),

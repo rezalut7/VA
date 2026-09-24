@@ -36,7 +36,7 @@ function Nav({ page, setPage }) {
   </nav>;
 }
 
-function Result({ result, onClose, onInvite, onShare, onStory, onDownload, storyAssets }) {
+function Result({ result, onClose, onInvite, onShare, onStory, onDownload, storyAssets, followUps, followUpQuestion, setFollowUpQuestion, onFollowUp, followUpLoading }) {
   if (!result) return null;
   return <div className="result-overlay"><article className="result-card">
     <button className="close" onClick={onClose}>×</button>
@@ -45,8 +45,16 @@ function Result({ result, onClose, onInvite, onShare, onStory, onDownload, story
     <h2>{result.title}</h2>
     {result.cards?.length ? <div className={`tarot-deck deck-${Math.min(result.cards.length,7)}`}>{result.cards.map((card,index)=><div className="tarot-card" key={`${card}-${index}`}><div className="card-art"/><b>{card}</b></div>)}</div> : null}
     {result.score ? <div className="score">{result.score}%</div> : null}
+    {result.verdict&&<div className="result-verdict"><small>Прямой ответ</small><p>{result.verdict}</p></div>}
     <p className="reading">{result.text}</p>
-    <p className="reflection">{result.reflection}</p>
+    {result.hidden&&<section className="reading-insight"><span>◐</span><div><small>Что скрыто</small><p>{result.hidden}</p></div></section>}
+    {result.action&&<section className="reading-insight action"><span>✦</span><div><small>Ваш следующий шаг</small><p>{result.action}</p></div></section>}
+    <div className="reflection"><small>Знак Агриппины</small><p>{result.reflection}</p></div>
+    <section className="oracle-dialogue">
+      <div className="story-share-title"><span>☾</span><div><b>Спросить глубже</b><small>Агриппина помнит этот вопрос и свой ответ</small></div></div>
+      {followUps.map((item,index)=><div className="follow-up-pair" key={index}><p className="user-question">{item.question}</p><p className="oracle-answer">{item.answer}</p></div>)}
+      <form onSubmit={onFollowUp}><textarea value={followUpQuestion} onChange={e=>setFollowUpQuestion(e.target.value)} placeholder="Например: что именно мне сейчас мешает?" maxLength="800" required/><button disabled={followUpLoading||followUpQuestion.trim().length<3}>{followUpLoading?'Агриппина всматривается…':'Задать уточняющий вопрос'}</button></form>
+    </section>
     <section className="story-share">
       <div className="story-share-title"><span>✦</span><div><b>Ваша карточка готова</b><small>Формат 9:16 для Telegram, Instagram и VK Stories</small></div></div>
       {storyAssets?<img src={storyAssets.storyUrl} alt="Карточка послания для Stories"/>:<div className="story-skeleton">Создаю магию…</div>}
@@ -69,6 +77,9 @@ export default function App() {
   const [promoCode, setPromoCode] = useState("");
   const [promoMessage, setPromoMessage] = useState("");
   const [storyAssets, setStoryAssets] = useState(null);
+  const [followUps, setFollowUps] = useState([]);
+  const [followUpQuestion, setFollowUpQuestion] = useState("");
+  const [followUpLoading, setFollowUpLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [slowBoot, setSlowBoot] = useState(false);
   const [bootAttempt, setBootAttempt] = useState(0);
@@ -98,6 +109,8 @@ export default function App() {
   useEffect(()=>{ if(page==='history') api('/api/history').then(r=>setHistory(r.items)).catch(e=>setError(e.message)); if(page==='profile'&&user?.isAdmin) api('/api/admin/stats').then(setAdminStats).catch(()=>{}); },[page,user?.isAdmin]);
   useEffect(()=>{
     setStoryAssets(null);
+    setFollowUps([]);
+    setFollowUpQuestion("");
     if(!result?.readingId) return;
     api(`/api/readings/${result.readingId}/share-card`,{method:'POST'}).then(setStoryAssets).catch(()=>{});
   },[result?.readingId]);
@@ -106,7 +119,7 @@ export default function App() {
     setError("");
     if (id === "daily") {
       setLoading(true);
-      try { setResult(await api('/api/daily')); } catch(e) { setError(e.message); }
+      try { setResult(await api('/api/daily',{timeout:55000})); } catch(e) { setError(e.message); }
       finally { setLoading(false); }
       return;
     }
@@ -115,7 +128,7 @@ export default function App() {
 
   async function submit(e) {
     e.preventDefault(); setLoading(true); setError("");
-    try { setResult(await api(`/api/readings/${mode}`, {method:'POST', body:JSON.stringify(form)})); setMode(null); }
+    try { setResult(await api(`/api/readings/${mode}`, {method:'POST', body:JSON.stringify(form),timeout:55000})); setMode(null); }
     catch(e) { setError(e.status===402?'Дневной лимит исчерпан. Подключите Premium или купите дополнительные запросы.':e.message); }
     finally { setLoading(false); }
   }
@@ -187,6 +200,19 @@ export default function App() {
     } catch(e) { setError(e.message); }
   }
 
+  async function askFollowUp(e){
+    e.preventDefault();
+    const question=followUpQuestion.trim();
+    if(!question||!result?.readingId) return;
+    setFollowUpLoading(true); setError("");
+    try {
+      const {answer}=await api(`/api/readings/${result.readingId}/follow-up`,{method:'POST',body:JSON.stringify({question}),timeout:55000});
+      setFollowUps(items=>[...items,{question,answer}]);
+      setFollowUpQuestion("");
+    } catch(e) { setError(e.status===402?'Лимит запросов исчерпан. Уточнения без ограничений доступны в Premium.':e.message); }
+    finally { setFollowUpLoading(false); }
+  }
+
   if (loading && !user) return <main className="splash"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><h1>Мадам Агриппина</h1><p className="connection-note">{slowBoot?'Соединение нестабильно — пробую другой маршрут…':'Слушаю тишину между звёздами…'}</p>{slowBoot&&<button className="primary retry-connection" onClick={retryConnection}>Повторить подключение</button>}</main>;
 
   if(!user) return <main className="splash consent-screen"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><p className="eyebrow">Восстановление связи</p><h1>Агриппина рядом</h1><p>{error||'Не удалось подтвердить запуск Mini App.'}</p><button className="primary" onClick={retryConnection}>Повторить подключение ✦</button><small>Переключать VPN или прокси не требуется.</small></main>;
@@ -246,7 +272,7 @@ export default function App() {
     </main>}
 
     {mode && <div className="sheet"><form onSubmit={submit}><button type="button" className="close" onClick={()=>setMode(null)}>×</button><p className="eyebrow">Личная практика</p><h2>{modes.find(x=>x.id===mode)?.title}</h2>{fields[mode].map(([name,label,type,options])=><label key={name}>{label}{type==='select'?<select value={form[name]||options[0]} onChange={e=>setForm({...form,[name]:e.target.value})}>{options.map(o=><option key={o}>{o}</option>)}</select>:type==='textarea'?<textarea required placeholder={options} value={form[name]||''} onChange={e=>setForm({...form,[name]:e.target.value})}/>:<input required type={type} placeholder={options} value={form[name]||''} onChange={e=>setForm({...form,[name]:e.target.value})}/>}</label>)}<button className="primary" disabled={loading}>{loading?'Собираю символы…':'Получить послание'}</button></form></div>}
-    <Result result={result} storyAssets={storyAssets} onShare={shareResult} onStory={shareStory} onDownload={downloadStory} onInvite={inviteFriend} onClose={()=>{setResult(null);api('/api/me').then(setUser).catch(()=>{});}} />
+    <Result result={result} storyAssets={storyAssets} onShare={shareResult} onStory={shareStory} onDownload={downloadStory} onInvite={inviteFriend} followUps={followUps} followUpQuestion={followUpQuestion} setFollowUpQuestion={setFollowUpQuestion} onFollowUp={askFollowUp} followUpLoading={followUpLoading} onClose={()=>{setResult(null);api('/api/me').then(setUser).catch(()=>{});}} />
     <Nav page={page} setPage={setPage}/>
   </div>;
 }

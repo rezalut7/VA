@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import crypto from "node:crypto";
 
 const app = express();
 app.use(cors());
@@ -13,6 +14,13 @@ const USER_AGENT =
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-6-luna";
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 3600);
+const ORACLE_RELAY_SECRET = process.env.ORACLE_RELAY_SECRET || "";
+
+function safeEqual(a,b) {
+  const left=Buffer.from(String(a||""));
+  const right=Buffer.from(String(b||""));
+  return left.length===right.length&&crypto.timingSafeEqual(left,right);
+}
 
 function aliceResponse(text, sessionState = {}, endSession = false) {
   const clean = String(text || "")
@@ -150,6 +158,38 @@ app.post("/alice", async (req, res) => {
   }
 });
 
+// Private AI gateway for Madam Agrippina. It keeps the provider key outside
+// the Russian origin server and accepts only bounded Responses API payloads.
+app.post("/internal/oracle",async(req,res)=>{
+  if(!ORACLE_RELAY_SECRET||!safeEqual(req.headers["x-oracle-secret"],ORACLE_RELAY_SECRET)) return res.status(401).json({error:"unauthorized"});
+  if(!OPENAI_API_KEY) return res.status(503).json({error:"ai_not_configured"});
+  const requested=String(req.body?.model||"gpt-5-mini");
+  const model=new Set(["gpt-5-mini","gpt-5.4-mini"]).has(requested)?requested:"gpt-5-mini";
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),60000);
+  try {
+    const upstream=await fetch("https://api.openai.com/v1/responses",{
+      method:"POST",
+      headers:{Authorization:`Bearer ${OPENAI_API_KEY}`,"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model,
+        reasoning:{effort:"low"},
+        instructions:String(req.body?.instructions||"").slice(0,12000),
+        input:String(req.body?.input||"").slice(0,18000),
+        max_output_tokens:Math.min(2000,Math.max(200,Number(req.body?.max_output_tokens)||1200)),
+        text:req.body?.text,
+        store:false,
+      }),
+      signal:controller.signal,
+    });
+    const data=await upstream.json().catch(()=>({error:"invalid_ai_response"}));
+    res.status(upstream.status).json(data);
+  } catch(error) {
+    console.error("Oracle relay error:",error.message);
+    res.status(error.name==="AbortError"?504:502).json({error:error.name==="AbortError"?"ai_timeout":"ai_unavailable"});
+  } finally { clearTimeout(timeout); }
+});
+
 // Open Food Facts proxy
 app.get("/api/food/search", async (req, res) => {
   const q = (req.query.q || "").trim();
@@ -243,6 +283,7 @@ app.get("/health", (req, res) =>
     ok: true,
     alice: true,
     openaiConfigured: Boolean(OPENAI_API_KEY),
+    oracleRelayConfigured: Boolean(OPENAI_API_KEY&&ORACLE_RELAY_SECRET),
     model: OPENAI_MODEL,
   })
 );

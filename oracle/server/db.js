@@ -22,6 +22,14 @@ await db.query(`CREATE TABLE IF NOT EXISTS promo_redemptions (
   UNIQUE(code,user_id)
 )`);
 await db.query(`CREATE INDEX IF NOT EXISTS promo_redemptions_code_idx ON promo_redemptions(code)`);
+await db.query(`CREATE TABLE IF NOT EXISTS reading_messages (
+  id bigserial PRIMARY KEY,
+  reading_id uuid NOT NULL REFERENCES readings(id) ON DELETE CASCADE,
+  role text NOT NULL CHECK(role IN ('user','assistant')),
+  content text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+)`);
+await db.query(`CREATE INDEX IF NOT EXISTS reading_messages_reading_idx ON reading_messages(reading_id,id)`);
 
 export async function query(text, params = []) {
   return db.query(text, params);
@@ -96,18 +104,16 @@ export async function publicUser(userId) {
     referralCode:u.referral_code, referrals:u.referrals, activeReferrals:u.active_referrals, totalReadings:u.total_readings,
     premiumUntil:u.premium_until, requestsLeft:left, isAdmin:config.adminIds.has(u.telegram_id),
     reminderEnabled:u.reminder_enabled,
-    termsAccepted:Boolean(u.terms_accepted_at), termsVersion:u.terms_version,
+    termsAccepted:Boolean(u.terms_accepted_at)&&u.terms_version==="2", termsVersion:u.terms_version,
   };
 }
 
-export async function acceptTerms(userId, version = "1") {
+export async function acceptTerms(userId, version = "2") {
   await transaction(async client=>{
     const user=(await client.query("SELECT terms_accepted_at,referred_by FROM users WHERE id=$1 FOR UPDATE",[userId])).rows[0];
     if(!user) throw Object.assign(new Error("user_not_found"),{status:404});
-    if(!user.terms_accepted_at) {
-      await client.query(`UPDATE users SET terms_accepted_at=now(),terms_version=$2,
-        bonus_requests=bonus_requests+CASE WHEN referred_by IS NOT NULL THEN 2 ELSE 0 END WHERE id=$1`,[userId,version]);
-    }
+    await client.query(`UPDATE users SET terms_accepted_at=now(),terms_version=$2,
+      bonus_requests=bonus_requests+CASE WHEN terms_accepted_at IS NULL AND referred_by IS NOT NULL THEN 2 ELSE 0 END WHERE id=$1`,[userId,version]);
   });
   return publicUser(userId);
 }
@@ -179,4 +185,32 @@ export async function saveReading(userId, kind, title, input, result) {
   const { rows } = await query(`INSERT INTO readings(user_id,kind,title,input,result)
     VALUES($1,$2,$3,$4,$5) RETURNING id,created_at`,[userId,kind,title,input,result]);
   return rows[0];
+}
+
+export async function readingContext(userId, limit = 5) {
+  const {rows}=await query(`SELECT kind,title,input,result,created_at FROM readings
+    WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2`,[userId,limit]);
+  return rows.reverse().map(row=>({
+    kind:row.kind,
+    title:row.title,
+    question:row.input?.question||row.input?.dream||null,
+    answer:String(row.result?.text||"").slice(0,700),
+    createdAt:row.created_at,
+  }));
+}
+
+export async function readingConversation(readingId, userId) {
+  const reading=(await query(`SELECT r.id,r.kind,r.title,r.input,r.result,u.first_name
+    FROM readings r JOIN users u ON u.id=r.user_id WHERE r.id=$1 AND r.user_id=$2`,[readingId,userId])).rows[0];
+  if(!reading) return null;
+  const {rows}=await query(`SELECT role,content,created_at FROM reading_messages
+    WHERE reading_id=$1 ORDER BY id ASC LIMIT 12`,[readingId]);
+  return {...reading,messages:rows};
+}
+
+export async function saveReadingExchange(readingId, question, answer) {
+  await transaction(async client=>{
+    await client.query(`INSERT INTO reading_messages(reading_id,role,content) VALUES($1,'user',$2)`,[readingId,question]);
+    await client.query(`INSERT INTO reading_messages(reading_id,role,content) VALUES($1,'assistant',$2)`,[readingId,answer]);
+  });
 }

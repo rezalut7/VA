@@ -95,7 +95,15 @@ export async function api(path, options = {}) {
 }
 
 export async function authenticate() {
-  const initData = await waitForTelegramInitData();
+  let cachedSessionError;
+  if (token) {
+    try { return await api("/api/me", { timeout: 6500, retries: 2, retryDelay: 250 }); }
+    catch (error) {
+      if (error.status !== 401) cachedSessionError = error;
+    }
+  }
+
+  const initData = await waitForTelegramInitData(1400);
   let telegramAuthError;
 
   if (initData) {
@@ -114,17 +122,13 @@ export async function authenticate() {
     }
   }
 
-  if (token) {
-    try { return await api("/api/me", { timeout: 10000, retries: 2 }); }
-    catch (error) { if (error.status !== 401) throw error; }
-  }
-
   if (import.meta.env.DEV) {
     const result = await api("/api/auth/dev", { method: "POST", retries: 1 });
     setToken(result.token);
     return result.user;
   }
 
+  if (cachedSessionError) throw cachedSessionError;
   if (telegramAuthError) throw new Error("Сессия Telegram устарела. Закройте Mini App и откройте его из бота снова.");
   throw new Error("Telegram не передал данные запуска. Откройте Mini App кнопкой внутри бота.");
 }

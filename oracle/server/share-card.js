@@ -65,7 +65,7 @@ export async function renderShareCard(reading) {
   const labels={daily:"КАРТА ДНЯ",oracle:"ОТВЕТ ОРАКУЛА",tarot:"РАСКЛАД ТАРО",compatibility:"СОВМЕСТИМОСТЬ",dream:"ТОЛКОВАНИЕ СНА"};
   const result=reading.result||{};
   const title=wrap(reading.title||result.title||"Послание для вас",24,3);
-  const body=wrap(result.text||"Ответ уже рядом. Прислушайтесь к тому, что отзывается внутри.",39,10);
+  const body=wrap([result.verdict,result.text].filter(Boolean).join(" ")||"Ответ уже рядом. Прислушайтесь к тому, что отзывается внутри.",39,10);
   const reflection=wrap(result.reflection||"Сохраните это послание и вернитесь к нему позже.",44,3);
   const cards=Array.isArray(result.cards)?result.cards.slice(0,3):[];
   const cardRow=cards.length?cards.map((card,index)=>{
