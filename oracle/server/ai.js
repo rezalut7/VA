@@ -75,15 +75,18 @@ async function requestOllama(body) {
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),45000);
   try {
+    const fields=body.text?.format?.name==="agrippina_follow_up"
+      ? 'Верни JSON строго вида {"answer":"текст"}.'
+      : 'Верни JSON с ключами title, verdict, text, hidden, action, reflection, cards (массив строк), score (число или null).';
     const response=await fetch(`${config.ollamaUrl}/api/chat`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
         model:config.ollamaModel,
         stream:false,
-        messages:[{role:"system",content:body.instructions},{role:"user",content:body.input}],
-        format:body.text?.format?.schema||"json",
-        options:{temperature:0.68,num_predict:Math.min(body.max_output_tokens||320,320),num_ctx:2048},
+        messages:[{role:"system",content:body.instructions},{role:"user",content:`${body.input}\n\n${fields}`}],
+        format:"json",
+        options:{temperature:0.68,num_predict:Math.min(body.max_output_tokens||280,280),num_ctx:2048},
         keep_alive:"30m",
       }),
       signal:controller.signal,
