@@ -1,0 +1,3 @@
+.tarot-card .card-art{background-image:url('/assets/tarot-moon.webp')}
+.tarot-card:nth-child(even) .card-art{background-image:url('/assets/tarot-sun.webp')}
+.tarot-card:nth-child(3n) .card-art{background-image:url('/assets/tarot-card-back.webp')}
