@@ -50,9 +50,22 @@ CREATE TABLE IF NOT EXISTS daily_cards (
 CREATE TABLE IF NOT EXISTS referrals (
   referrer_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   referred_id uuid UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  activated_at timestamptz,
+  reward_granted_at timestamptz,
+  premium_reward_granted_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY(referrer_id,referred_id)
 );
+
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+  id bigserial PRIMARY KEY,
+  code text NOT NULL,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  premium_days integer NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(code,user_id)
+);
+CREATE INDEX IF NOT EXISTS promo_redemptions_code_idx ON promo_redemptions(code);
 
 CREATE TABLE IF NOT EXISTS payments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

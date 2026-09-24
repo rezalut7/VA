@@ -41,8 +41,8 @@ export async function authenticate() {
   return result.user;
 }
 
-export function share(text) {
-  const url = `https://t.me/share/url?url=${encodeURIComponent(location.origin)}&text=${encodeURIComponent(text)}`;
+export function share(text, sharedUrl = location.origin) {
+  const url = `https://t.me/share/url?url=${encodeURIComponent(sharedUrl)}&text=${encodeURIComponent(text)}`;
   if (window.Telegram?.WebApp?.openTelegramLink) window.Telegram.WebApp.openTelegramLink(url);
   else window.open(url, "_blank", "noopener,noreferrer");
 }

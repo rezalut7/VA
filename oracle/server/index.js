@@ -5,7 +5,7 @@ import cors from "cors";
 import { config } from "./config.js";
 import { createReading } from "./ai.js";
 import { botApi, signSession, startKeyboard, termsKeyboard, validateInitData, verifySession } from "./telegram.js";
-import { acceptTerms, consumeRequest, publicUser, query, saveReading, transaction, upsertUser } from "./db.js";
+import { acceptTerms, activateReferral, consumeRequest, publicUser, query, redeemPromo, rewardReferralPurchase, saveReading, transaction, upsertUser } from "./db.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -26,6 +26,14 @@ async function accepted(req,res,next) {
 }
 const protectedRoute=[auth,asyncRoute(accepted)];
 
+async function activateReferralAndNotify(userId) {
+  const reward=await activateReferral(userId);
+  if(!reward) return;
+  const milestone=reward.premiumDays?`\nИ ещё +${reward.premiumDays} ${reward.premiumDays===1?'день':'дня'} Premium за достижение ${reward.active} друзей ✦`:"";
+  try { await botApi("sendMessage",{chat_id:reward.telegram_id,text:`🎁 ${reward.referredName} получил первое послание!\n\nВам начислено +3 запроса.${milestone}`,reply_markup:startKeyboard()}); }
+  catch(error) { console.error("Referral notification failed",error.message); }
+}
+
 app.get("/health",asyncRoute(async(req,res)=>{
   await query("SELECT 1");
   res.json({ok:true,app:"madam-agrippina-ai",bot:config.botUsername,ai:Boolean(config.openaiKey)});
@@ -45,6 +53,7 @@ app.post("/api/auth/dev",asyncRoute(async(req,res)=>{
 
 app.get("/api/me",auth,asyncRoute(async(req,res)=>res.json(await publicUser(req.session.userId))));
 app.post("/api/me/accept-terms",auth,asyncRoute(async(req,res)=>res.json(await acceptTerms(req.session.userId))));
+app.post("/api/promo/redeem",...protectedRoute,asyncRoute(async(req,res)=>res.json(await redeemPromo(req.session.userId,req.body.code))));
 app.post("/api/me/reminder",...protectedRoute,asyncRoute(async(req,res)=>{
   const enabled=Boolean(req.body.enabled);
   await query("UPDATE users SET reminder_enabled=$2 WHERE id=$1",[req.session.userId,enabled]);
@@ -59,6 +68,7 @@ app.get("/api/daily",...protectedRoute,asyncRoute(async(req,res)=>{
   const result=await createReading("daily",{});
   const saved=await saveReading(req.session.userId,"daily",result.title,{},result);
   await query("INSERT INTO daily_cards(user_id,reading_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[req.session.userId,saved.id]);
+  await activateReferralAndNotify(req.session.userId);
   res.json(result);
 }));
 
@@ -79,6 +89,7 @@ app.post("/api/readings/:kind",...protectedRoute,asyncRoute(async(req,res)=>{
   const input=Object.fromEntries(Object.entries(req.body).map(([k,v])=>[k,String(v).trim().slice(0,2500)]));
   const result=await createReading(kind,input);
   await saveReading(req.session.userId,kind,result.title,input,result);
+  await activateReferralAndNotify(req.session.userId);
   res.json(result);
 }));
 
@@ -116,7 +127,8 @@ app.get("/api/admin/stats",...protectedRoute,asyncRoute(async(req,res)=>{
     (SELECT count(*)::int FROM users WHERE created_at>now()-interval '24 hours') new_today,
     (SELECT count(*)::int FROM readings) readings,
     (SELECT coalesce(sum(stars),0)::int FROM payments) stars,
-    (SELECT count(*)::int FROM payments) payments`);
+    (SELECT count(*)::int FROM payments) payments,
+    (SELECT count(*)::int FROM promo_redemptions) promo_redemptions`);
   const sources=await query(`SELECT coalesce(acquisition_source,'direct') source,count(*)::int users
     FROM users GROUP BY 1 ORDER BY 2 DESC LIMIT 10`);
   res.json({...rows[0],sources:sources.rows});
@@ -144,10 +156,10 @@ app.post("/telegram/webhook",asyncRoute(async(req,res)=>{
   const callback=update.callback_query;
   if(callback?.data==="accept_terms_v1") {
     const user=await upsertUser(callback.from,null);
-    await acceptTerms(user.id);
+    const acceptedUser=await acceptTerms(user.id);
     await botApi("answerCallbackQuery",{callback_query_id:callback.id,text:"Готово — условия приняты ✨"});
     const name=String(callback.from.first_name||"Путник").replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
-    const caption=`✨ <b>${name}, добро пожаловать.</b>\n\nМадам Агриппина готова открыть для вас символы, которые помогут взглянуть на ситуацию иначе.\n\nВас уже ждут <b>3 бесплатных запроса</b>, карта дня, Таро, совместимость и толкование снов.\n\nНажмите кнопку ниже — начнём.`;
+    const caption=`✨ <b>${name}, добро пожаловать.</b>\n\nМадам Агриппина готова открыть для вас символы, которые помогут взглянуть на ситуацию иначе.\n\nВас уже ждут <b>${acceptedUser.requestsLeft} бесплатных запросов</b>, карта дня, Таро, совместимость и толкование снов.\n\nНажмите кнопку ниже — начнём.`;
     if(callback.message?.photo) await botApi("editMessageCaption",{chat_id:callback.message.chat.id,message_id:callback.message.message_id,caption,parse_mode:"HTML",reply_markup:startKeyboard()});
     else await botApi("sendMessage",{chat_id:callback.message.chat.id,text:caption,parse_mode:"HTML",reply_markup:startKeyboard()});
   }
@@ -156,13 +168,20 @@ app.post("/telegram/webhook",asyncRoute(async(req,res)=>{
   if(payment?.currency==="XTR") {
     const [product,userId]=payment.invoice_payload.split(":");
     const expected=products[product];
-    if(expected && expected.stars===payment.total_amount) await transaction(async client=>{
+    if(expected && expected.stars===payment.total_amount) {
+      const applied=await transaction(async client=>{
       const inserted=await client.query(`INSERT INTO payments(user_id,telegram_charge_id,product,stars,payload)
         VALUES($1,$2,$3,$4,$5) ON CONFLICT(telegram_charge_id) DO NOTHING RETURNING id`,[userId,payment.telegram_payment_charge_id,product,payment.total_amount,payment.invoice_payload]);
-      if(!inserted.rowCount) return;
+      if(!inserted.rowCount) return false;
       if(product==="premium_week") await client.query(`UPDATE users SET premium_until=GREATEST(coalesce(premium_until,now()),now())+interval '7 days' WHERE id=$1`,[userId]);
       if(product==="extra_requests") await client.query("UPDATE users SET bonus_requests=bonus_requests+10 WHERE id=$1",[userId]);
+      return true;
     });
+      if(applied&&product==="premium_week") {
+        const reward=await rewardReferralPurchase(userId);
+        if(reward) try { await botApi("sendMessage",{chat_id:reward.telegram_id,text:"💜 Ваш друг подключил Premium. Вам начислен 1 день Premium — спасибо, что помогаете Агриппине расти!",reply_markup:startKeyboard()}); } catch(error) { console.error("Referral purchase notification failed",error.message); }
+      }
+    }
   }
   const message=update.message;
   if(message?.text?.startsWith("/start")) {
@@ -172,7 +191,8 @@ app.post("/telegram/webhook",asyncRoute(async(req,res)=>{
     if(user.terms_accepted_at) {
       await botApi("sendPhoto",{chat_id:message.chat.id,photo:`${config.publicUrl}/assets/madam-agrippina-avatar.png`,caption:"✦ <b>Мадам Агриппина ждёт вас.</b>\n\nКарта дня, Таро, совместимость и толкование снов — в одном мистическом пространстве.",parse_mode:"HTML",reply_markup:startKeyboard(url)});
     } else {
-      const caption=`🔮 <b>Мадам Агриппина AI</b>\n\nДобро пожаловать туда, где символы помогают услышать себя.\n\n✦ Персональная карта дня\n♢ Расклады Таро\n∞ Совместимость пары\n☾ Толкование снов\n◐ Ответы Оракула\n\n<b>Перед началом</b> подтвердите согласие с условиями. Сервис предназначен для развлечения и саморефлексии, не заменяет медицинские, юридические или финансовые рекомендации. 18+`;
+      const referralGift=start.startsWith("ref_")?"\n\n🎁 <b>Подарок по приглашению:</b> после согласия вам начислят +2 бесплатных запроса.":"";
+      const caption=`🔮 <b>Мадам Агриппина AI</b>\n\nДобро пожаловать туда, где символы помогают услышать себя.\n\n✦ Персональная карта дня\n♢ Расклады Таро\n∞ Совместимость пары\n☾ Толкование снов\n◐ Ответы Оракула${referralGift}\n\n<b>Перед началом</b> подтвердите согласие с условиями. Сервис предназначен для развлечения и саморефлексии, не заменяет медицинские, юридические или финансовые рекомендации. 18+`;
       await botApi("sendPhoto",{chat_id:message.chat.id,photo:`${config.publicUrl}/assets/madam-agrippina-avatar.png`,caption,parse_mode:"HTML",reply_markup:termsKeyboard()});
     }
   }

@@ -25,6 +25,8 @@ export const config = {
   freeDailyRequests: int("FREE_DAILY_REQUESTS", 3),
   premiumWeekStars: int("PREMIUM_WEEK_STARS", 149),
   extraRequestsStars: int("EXTRA_REQUESTS_STARS", 49),
+  promoWeekCode: (process.env.PROMO_WEEK_CODE || "AGRIPPINA7").trim().toUpperCase(),
+  promoWeekLimit: int("PROMO_WEEK_LIMIT", 100),
 };
 
 if (process.env.NODE_ENV === "production" && config.sessionSecret.length < 32) {
