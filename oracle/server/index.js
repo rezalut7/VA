@@ -6,6 +6,7 @@ import { config } from "./config.js";
 import { createReading } from "./ai.js";
 import { botApi, signSession, startKeyboard, termsKeyboard, validateInitData, verifySession } from "./telegram.js";
 import { acceptTerms, activateReferral, consumeRequest, publicUser, query, redeemPromo, rewardReferralPurchase, saveReading, transaction, upsertUser } from "./db.js";
+import { renderShareCard, signShareCard, verifyShareCard } from "./share-card.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -61,15 +62,15 @@ app.post("/api/me/reminder",...protectedRoute,asyncRoute(async(req,res)=>{
 }));
 
 app.get("/api/daily",...protectedRoute,asyncRoute(async(req,res)=>{
-  const existing=await query(`SELECT r.result FROM daily_cards d JOIN readings r ON r.id=d.reading_id
+  const existing=await query(`SELECT r.id,r.result FROM daily_cards d JOIN readings r ON r.id=d.reading_id
     WHERE d.user_id=$1 AND d.card_date=current_date`,[req.session.userId]);
-  if(existing.rowCount) return res.json(existing.rows[0].result);
+  if(existing.rowCount) return res.json({...existing.rows[0].result,readingId:existing.rows[0].id});
   await consumeRequest(req.session.userId);
   const result=await createReading("daily",{});
   const saved=await saveReading(req.session.userId,"daily",result.title,{},result);
   await query("INSERT INTO daily_cards(user_id,reading_id) VALUES($1,$2) ON CONFLICT DO NOTHING",[req.session.userId,saved.id]);
   await activateReferralAndNotify(req.session.userId);
-  res.json(result);
+  res.json({...result,readingId:saved.id});
 }));
 
 const validators={
@@ -88,9 +89,31 @@ app.post("/api/readings/:kind",...protectedRoute,asyncRoute(async(req,res)=>{
   await consumeRequest(req.session.userId);
   const input=Object.fromEntries(Object.entries(req.body).map(([k,v])=>[k,String(v).trim().slice(0,2500)]));
   const result=await createReading(kind,input);
-  await saveReading(req.session.userId,kind,result.title,input,result);
+  const saved=await saveReading(req.session.userId,kind,result.title,input,result);
   await activateReferralAndNotify(req.session.userId);
-  res.json(result);
+  res.json({...result,readingId:saved.id});
+}));
+
+app.post("/api/readings/:id/share-card",...protectedRoute,asyncRoute(async(req,res)=>{
+  const found=await query("SELECT id FROM readings WHERE id=$1 AND user_id=$2",[req.params.id,req.session.userId]);
+  if(!found.rowCount) return res.status(404).json({error:"not_found",message:"Послание не найдено"});
+  const signature=signShareCard(req.params.id);
+  const base=`${config.publicUrl}/share/cards/${req.params.id}.png?sig=${signature}`;
+  res.json({storyUrl:base,downloadUrl:`${base}&download=1`});
+}));
+
+app.get("/share/cards/:id.png",asyncRoute(async(req,res)=>{
+  const readingId=req.params.id;
+  if(!verifyShareCard(readingId,req.query.sig)) return res.status(403).send("Invalid share link");
+  const {rows}=await query(`SELECT r.kind,r.title,r.result,u.first_name
+    FROM readings r JOIN users u ON u.id=r.user_id WHERE r.id=$1`,[readingId]);
+  if(!rows[0]) return res.status(404).send("Not found");
+  const card=await renderShareCard(rows[0]);
+  res.setHeader("Content-Type","image/png");
+  res.setHeader("Cache-Control","public, max-age=86400, immutable");
+  res.setHeader("Access-Control-Allow-Origin","https://web.telegram.org");
+  if(req.query.download==="1") res.setHeader("Content-Disposition",`attachment; filename="agrippina-${readingId}.png"`);
+  res.send(card);
 }));
 
 app.get("/api/history",...protectedRoute,asyncRoute(async(req,res)=>{
@@ -108,6 +131,7 @@ app.post("/api/history/:id/favorite",...protectedRoute,asyncRoute(async(req,res)
 
 const products={
   premium_week:{title:"Premium на 7 дней",description:"Безлимитные практики и расширенные расклады на неделю",stars:config.premiumWeekStars},
+  premium_month:{title:"Premium на месяц",description:"Безлимитные практики и расширенные расклады с автоматическим продлением раз в 30 дней",stars:config.premiumMonthStars,subscriptionPeriod:2592000},
   extra_requests:{title:"10 дополнительных запросов",description:"Десять практик сверх дневного лимита",stars:config.extraRequestsStars},
 };
 app.post("/api/payments/invoice",...protectedRoute,asyncRoute(async(req,res)=>{
@@ -116,6 +140,7 @@ app.post("/api/payments/invoice",...protectedRoute,asyncRoute(async(req,res)=>{
   const payload=`${req.body.product}:${req.session.userId}:${Date.now()}`;
   const invoiceLink=await botApi("createInvoiceLink",{
     title:product.title,description:product.description,payload,currency:"XTR",prices:[{label:product.title,amount:product.stars}],provider_token:"",
+    ...(product.subscriptionPeriod?{subscription_period:product.subscriptionPeriod}:{}),
   });
   res.json({invoiceLink});
 }));
@@ -174,10 +199,11 @@ app.post("/telegram/webhook",asyncRoute(async(req,res)=>{
         VALUES($1,$2,$3,$4,$5) ON CONFLICT(telegram_charge_id) DO NOTHING RETURNING id`,[userId,payment.telegram_payment_charge_id,product,payment.total_amount,payment.invoice_payload]);
       if(!inserted.rowCount) return false;
       if(product==="premium_week") await client.query(`UPDATE users SET premium_until=GREATEST(coalesce(premium_until,now()),now())+interval '7 days' WHERE id=$1`,[userId]);
+      if(product==="premium_month") await client.query(`UPDATE users SET premium_until=GREATEST(coalesce(premium_until,now()),now())+interval '30 days' WHERE id=$1`,[userId]);
       if(product==="extra_requests") await client.query("UPDATE users SET bonus_requests=bonus_requests+10 WHERE id=$1",[userId]);
       return true;
     });
-      if(applied&&product==="premium_week") {
+      if(applied&&["premium_week","premium_month"].includes(product)) {
         const reward=await rewardReferralPurchase(userId);
         if(reward) try { await botApi("sendMessage",{chat_id:reward.telegram_id,text:"💜 Ваш друг подключил Premium. Вам начислен 1 день Premium — спасибо, что помогаете Агриппине расти!",reply_markup:startKeyboard()}); } catch(error) { console.error("Referral purchase notification failed",error.message); }
       }

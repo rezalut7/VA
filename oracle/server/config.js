@@ -24,6 +24,7 @@ export const config = {
   allowDevAuth: process.env.ALLOW_DEV_AUTH === "true",
   freeDailyRequests: int("FREE_DAILY_REQUESTS", 3),
   premiumWeekStars: int("PREMIUM_WEEK_STARS", 149),
+  premiumMonthStars: int("PREMIUM_MONTH_STARS", 399),
   extraRequestsStars: int("EXTRA_REQUESTS_STARS", 49),
   promoWeekCode: (process.env.PROMO_WEEK_CODE || "AGRIPPINA7").trim().toUpperCase(),
   promoWeekLimit: int("PROMO_WEEK_LIMIT", 100),

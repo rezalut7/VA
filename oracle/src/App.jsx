@@ -36,7 +36,7 @@ function Nav({ page, setPage }) {
   </nav>;
 }
 
-function Result({ result, onClose, onInvite }) {
+function Result({ result, onClose, onInvite, onShare, onStory, onDownload, storyAssets }) {
   if (!result) return null;
   return <div className="result-overlay"><article className="result-card">
     <button className="close" onClick={onClose}>×</button>
@@ -47,7 +47,12 @@ function Result({ result, onClose, onInvite }) {
     {result.score ? <div className="score">{result.score}%</div> : null}
     <p className="reading">{result.text}</p>
     <p className="reflection">{result.reflection}</p>
-    <button className="primary" onClick={()=>share(`${result.title}\n\n${result.text}`)}>Поделиться в Telegram</button>
+    <section className="story-share">
+      <div className="story-share-title"><span>✦</span><div><b>Ваша карточка готова</b><small>Формат 9:16 для Telegram, Instagram и VK Stories</small></div></div>
+      {storyAssets?<img src={storyAssets.storyUrl} alt="Карточка послания для Stories"/>:<div className="story-skeleton">Создаю магию…</div>}
+      <button className="story-primary" disabled={!storyAssets} onClick={onStory}>Выложить в Telegram Stories</button>
+      <div className="story-actions"><button disabled={!storyAssets} onClick={onDownload}>Скачать карточку</button><button onClick={onShare}>Отправить в чат</button></div>
+    </section>
     <button className="result-referral" onClick={onInvite}>Подарить другу +2 запроса</button>
     <small className="reward-hint">После его первого послания вы получите +3 запроса</small>
   </article></div>;
@@ -63,12 +68,18 @@ export default function App() {
   const [adminStats, setAdminStats] = useState(null);
   const [promoCode, setPromoCode] = useState("");
   const [promoMessage, setPromoMessage] = useState("");
+  const [storyAssets, setStoryAssets] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const greeting = useMemo(()=>new Date().getHours()<12?'Доброе утро':new Date().getHours()<18?'Добрый день':'Добрый вечер',[]);
 
   useEffect(()=>{ authenticate().then(setUser).catch(e=>setError(e.message)).finally(()=>setLoading(false)); },[]);
   useEffect(()=>{ if(page==='history') api('/api/history').then(r=>setHistory(r.items)).catch(e=>setError(e.message)); if(page==='profile'&&user?.isAdmin) api('/api/admin/stats').then(setAdminStats).catch(()=>{}); },[page,user?.isAdmin]);
+  useEffect(()=>{
+    setStoryAssets(null);
+    if(!result?.readingId) return;
+    api(`/api/readings/${result.readingId}/share-card`,{method:'POST'}).then(setStoryAssets).catch(()=>{});
+  },[result?.readingId]);
 
   async function openMode(id) {
     setError("");
@@ -122,6 +133,29 @@ export default function App() {
     share("Я нашёл(ла) Мадам Агриппину — здесь можно получить карту дня, спросить Оракула, сделать расклад Таро и разобрать сон. По моей ссылке тебе подарят +2 бесплатных запроса ✦",referralLink);
   }
 
+  function shareResult(){
+    share(`${result.title}\n\n${result.text}\n\nПолучить своё послание:`,referralLink);
+  }
+
+  function shareStory(){
+    if(!storyAssets) return;
+    const tg=window.Telegram?.WebApp;
+    if(!tg?.shareToStory) return setError("Обновите Telegram, чтобы публиковать карточки в Stories");
+    try {
+      tg.shareToStory(storyAssets.storyUrl,{text:"Моё послание от Мадам Агриппины ✦",widget_link:{url:referralLink,name:"Получить своё послание"}});
+    } catch(e) {
+      try { tg.shareToStory(storyAssets.storyUrl,{text:"Моё послание от Мадам Агриппины ✦"}); }
+      catch { setError("Не удалось открыть редактор Stories. Попробуйте скачать карточку."); }
+    }
+  }
+
+  function downloadStory(){
+    if(!storyAssets) return;
+    const tg=window.Telegram?.WebApp;
+    if(tg?.downloadFile) tg.downloadFile({url:storyAssets.downloadUrl,file_name:`agrippina-${result.readingId}.png`});
+    else window.open(storyAssets.downloadUrl,"_blank","noopener,noreferrer");
+  }
+
   async function redeemPromo(e){
     e.preventDefault();
     if(!promoCode.trim()) return;
@@ -146,7 +180,8 @@ export default function App() {
       <section className="hero"><div className="hero-card"><img src="/assets/tarot-card-back.webp" alt="Мистическая карта"/></div><p className="eyebrow">Сегодня · {new Date().toLocaleDateString('ru-RU',{day:'numeric',month:'long'})}</p><h2>Ответ уже рядом</h2><p>Выберите практику, чтобы взглянуть на ситуацию с новой стороны.</p><button className="primary" onClick={()=>openMode('daily')}>Открыть карту дня</button></section>
       <div className="balance"><span>Бесплатных запросов сегодня</span><b>{user?.requestsLeft ?? 3}</b></div>
       <section className="mode-grid">{modes.slice(1).map(item=><button className="mode" key={item.id} onClick={()=>openMode(item.id)}><i>{item.icon}</i><span><b>{item.title}</b><small>{item.subtitle}</small></span><em>›</em></button>)}</section>
-      <section className="premium"><span>✧</span><div><p className="eyebrow">Premium на 7 дней</p><h3>Больше глубины, без лимитов</h3></div><button onClick={()=>buy('premium_week')}>149 ★</button></section>
+      <section className="premium premium-month"><span>✧</span><div><p className="eyebrow">Premium на месяц · выгоднее</p><h3>Вся глубина Агриппины без лимитов</h3><small>399 ★ каждые 30 дней · можно отменить в Telegram</small></div><button onClick={()=>buy('premium_month')}>399 ★</button></section>
+      <button className="week-offer" onClick={()=>buy('premium_week')}>Попробовать Premium на 7 дней · 149 ★</button>
       <p className="disclaimer">Сервис создан для развлечения и саморефлексии. Он не заменяет профессиональные медицинские, юридические или финансовые рекомендации.</p>
     </main>}
 
@@ -158,6 +193,7 @@ export default function App() {
         <h2>{user?.firstName||'Путник'}</h2>
         <p>{user?.premiumUntil && new Date(user.premiumUntil)>new Date() ? `Premium до ${new Date(user.premiumUntil).toLocaleDateString('ru-RU')}`:'Базовый доступ'}</p>
         <div className="stats"><div><b>{user?.totalReadings||0}</b><span>посланий</span></div><div><b>{activeReferrals}</b><span>активных друзей</span></div><div><b>{user?.streak||1}</b><span>дней подряд</span></div></div>
+        <button className="primary" onClick={()=>buy('premium_month')}>Premium на месяц · 399 ★</button>
         <button className="ghost" onClick={()=>buy('extra_requests')}>Купить 10 запросов · 49 ★</button>
         <button className="ghost" onClick={toggleReminder}>{user?.reminderEnabled?'Выключить карту дня 🔕':'Напоминать о карте дня 🔔'}</button>
       </div>
@@ -189,7 +225,7 @@ export default function App() {
     </main>}
 
     {mode && <div className="sheet"><form onSubmit={submit}><button type="button" className="close" onClick={()=>setMode(null)}>×</button><p className="eyebrow">Личная практика</p><h2>{modes.find(x=>x.id===mode)?.title}</h2>{fields[mode].map(([name,label,type,options])=><label key={name}>{label}{type==='select'?<select value={form[name]||options[0]} onChange={e=>setForm({...form,[name]:e.target.value})}>{options.map(o=><option key={o}>{o}</option>)}</select>:type==='textarea'?<textarea required placeholder={options} value={form[name]||''} onChange={e=>setForm({...form,[name]:e.target.value})}/>:<input required type={type} placeholder={options} value={form[name]||''} onChange={e=>setForm({...form,[name]:e.target.value})}/>}</label>)}<button className="primary" disabled={loading}>{loading?'Собираю символы…':'Получить послание'}</button></form></div>}
-    <Result result={result} onInvite={inviteFriend} onClose={()=>{setResult(null);api('/api/me').then(setUser).catch(()=>{});}} />
+    <Result result={result} storyAssets={storyAssets} onShare={shareResult} onStory={shareStory} onDownload={downloadStory} onInvite={inviteFriend} onClose={()=>{setResult(null);api('/api/me').then(setUser).catch(()=>{});}} />
     <Nav page={page} setPage={setPage}/>
   </div>;
 }
