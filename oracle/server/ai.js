@@ -8,7 +8,7 @@ const system = `Ты — Мадам Агриппина, харизматична
 2. Назови не меньше двух конкретных деталей из вопроса или сна и свяжи их в единую интерпретацию.
 3. Покажи скрытую динамику: чего человек хочет, что мешает и что может измениться.
 4. Дай один конкретный шаг на ближайшие 24–72 часа. Никакой банальности вроде «прислушайтесь к себе» без объяснения как именно.
-5. Основное толкование пиши на 230–420 слов, живо и человечно; уточняющий ответ — на 100–220 слов. Допустимы фразы «Я вижу здесь…», «Обратите внимание на знак…», но без дешёвого запугивания и фатальных пророчеств.
+5. Основное толкование пиши плотно, на 160–260 слов; уточняющий ответ — на 80–140 слов. Допустимы фразы «Я вижу здесь…», «Обратите внимание на знак…», но без дешёвого запугивания и фатальных пророчеств.
 6. Используй недавние обращения как память о человеке: замечай повторяющиеся темы, но не повторяй старый ответ и не упоминай технические детали хранения истории.
 
 Особенности практик:
@@ -73,7 +73,7 @@ async function requestOpenAi(body) {
 async function requestOllama(body) {
   if(!config.ollamaUrl) return null;
   const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),90000);
+  const timer=setTimeout(()=>controller.abort(),50000);
   try {
     const response=await fetch(`${config.ollamaUrl}/api/chat`,{
       method:"POST",
@@ -83,7 +83,7 @@ async function requestOllama(body) {
         stream:false,
         messages:[{role:"system",content:body.instructions},{role:"user",content:body.input}],
         format:body.text?.format?.schema||"json",
-        options:{temperature:0.72,num_predict:body.max_output_tokens||1400,num_ctx:8192},
+        options:{temperature:0.7,num_predict:Math.min(body.max_output_tokens||700,700),num_ctx:4096},
         keep_alive:"30m",
       }),
       signal:controller.signal,
@@ -151,7 +151,7 @@ export async function createReading(kind,input,context={}) {
 
 export async function createFollowUp(reading,question,recentReadings=[]) {
   const dialogue=(reading.messages||[]).map(message=>`${message.role==="user"?"Пользователь":"Агриппина"}: ${message.content}`).join("\n");
-  const input=`Исходный запрос: ${JSON.stringify(reading.input)}\nПервый ответ: ${JSON.stringify(reading.result)}\nПредыдущие уточнения:\n${dialogue}\n\nНовый вопрос пользователя: ${question}\n\nОтветь как продолжение личного разговора. 100–220 слов. Дай прямой ответ, опираясь на детали исходного запроса и нового вопроса. Не повторяй первый ответ. Недавний контекст: ${JSON.stringify(recentReadings).slice(0,3000)}`;
+  const input=`Исходный запрос: ${JSON.stringify(reading.input)}\nПервый ответ: ${JSON.stringify(reading.result)}\nПредыдущие уточнения:\n${dialogue}\n\nНовый вопрос пользователя: ${question}\n\nОтветь как продолжение личного разговора. 80–140 слов. Дай прямой ответ, опираясь на детали исходного запроса и нового вопроса. Не повторяй первый ответ. Недавний контекст: ${JSON.stringify(recentReadings).slice(0,3000)}`;
   try {
     const data=await requestModel({model:config.openaiModel,reasoning:{effort:"low"},instructions:system,input,max_output_tokens:900,text:{format:followUpFormat}});
     if(!data) return "Я вижу, что это уточнение меняет акцент первоначального вопроса. Не ищите подтверждения старому страху: назовите один факт, который появился после первого ответа, и отделите его от предположений. Именно новый факт покажет следующий шаг.";
