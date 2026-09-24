@@ -3,3 +3,6 @@
 .consent-screen > p:not(.eyebrow) { max-width: 390px; margin: 12px auto 18px; font-size: 14px; line-height: 1.6; color: #c7bbcd; }
 .consent-screen .terms-link { display: block; color: #e3c177; margin-bottom: 18px; font-size: 13px; }
 .consent-screen .primary { max-width: 390px; margin: auto; }
+.consent-screen .consent-accept { margin: 2px auto 14px; padding: 17px 20px; font-size: 15px; box-shadow: 0 12px 34px rgba(210,159,78,.34); }
+.consent-screen .consent-error { max-width: 390px; margin: 0 auto 14px; padding: 10px 12px; border: 1px solid #9a4965; border-radius: 12px; background: rgba(111,48,72,.35); color: #ffdce7; font-size: 11px; }
+.consent-screen small { display: block; max-width: 390px; margin: 0 auto; color: #746b7d; font-size: 9px; line-height: 1.45; }

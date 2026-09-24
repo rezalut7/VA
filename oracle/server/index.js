@@ -200,9 +200,15 @@ app.post("/telegram/webhook",asyncRoute(async(req,res)=>{
 }));
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
-app.use(express.static(path.join(root,"dist"),{maxAge:"1h"}));
+app.use(express.static(path.join(root,"dist"),{maxAge:"1h",setHeaders:(res,filePath)=>{
+  if(filePath.endsWith("index.html")) res.setHeader("Cache-Control","no-store, no-cache, must-revalidate");
+}}));
 app.get("/terms",(req,res)=>res.sendFile(path.join(root,"dist","terms.html")));
-app.get("*",(req,res,next)=>req.path.startsWith("/api/")||req.path.startsWith("/telegram/")?next():res.sendFile(path.join(root,"dist","index.html")));
+app.get("*",(req,res,next)=>{
+  if(req.path.startsWith("/api/")||req.path.startsWith("/telegram/")) return next();
+  res.setHeader("Cache-Control","no-store, no-cache, must-revalidate");
+  res.sendFile(path.join(root,"dist","index.html"));
+});
 
 app.use((error,req,res,next)=>{
   console.error(error.detail||error.message||error);
