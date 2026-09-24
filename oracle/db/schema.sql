@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   reminder_hour_utc smallint NOT NULL DEFAULT 8 CHECK(reminder_hour_utc BETWEEN 0 AND 23),
   last_reminder_on date,
   streak integer NOT NULL DEFAULT 1,
+  terms_accepted_at timestamptz,
+  terms_version text,
   created_at timestamptz NOT NULL DEFAULT now(),
   last_seen_at timestamptz NOT NULL DEFAULT now()
 );

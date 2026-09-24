@@ -101,7 +101,16 @@ export default function App() {
     catch(e){setError(e.message)}
   }
 
+  async function acceptConditions(){
+    setLoading(true); setError("");
+    try { setUser(await api('/api/me/accept-terms',{method:'POST'})); }
+    catch(e){ setError(e.message); }
+    finally { setLoading(false); }
+  }
+
   if (loading && !user) return <main className="splash"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><h1>Мадам Агриппина</h1><p>Слушаю тишину между звёздами…</p></main>;
+
+  if(user && !user.termsAccepted) return <main className="splash consent-screen"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><p className="eyebrow">Первое знакомство</p><h1>Добро пожаловать</h1><p>Мадам Агриппина использует символы и образы для развлечения и саморефлексии. Сервис 18+ и не заменяет медицинские, юридические или финансовые рекомендации.</p><a className="terms-link" href="/terms" target="_blank" rel="noreferrer">Условия и конфиденциальность</a>{error&&<div className="error">{error}</div>}<button className="primary" disabled={loading} onClick={acceptConditions}>{loading?'Сохраняю…':'Согласен — продолжить ✦'}</button></main>;
 
   return <div className="app">
     <header><div><p className="eyebrow">{greeting}</p><h1>{user?.firstName || 'Путник'}</h1></div><div className="streak">🔥 {user?.streak || 1}</div></header>

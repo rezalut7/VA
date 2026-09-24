@@ -50,9 +50,16 @@ export async function botApi(method, payload) {
   return data.result;
 }
 
-export function startKeyboard() {
+export function startKeyboard(url = config.publicUrl) {
   return { inline_keyboard:[[{
     text:"Открыть Мадам Агриппину ✦",
-    web_app:{url:config.publicUrl},
+    web_app:{url},
   }]]};
+}
+
+export function termsKeyboard() {
+  return { inline_keyboard:[
+    [{text:"✅ Согласен с условиями",callback_data:"accept_terms_v1"}],
+    [{text:"Условия и конфиденциальность",url:`${config.publicUrl}/terms`}],
+  ]};
 }

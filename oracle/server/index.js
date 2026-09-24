@@ -4,8 +4,8 @@ import express from "express";
 import cors from "cors";
 import { config } from "./config.js";
 import { createReading } from "./ai.js";
-import { botApi, signSession, startKeyboard, validateInitData, verifySession } from "./telegram.js";
-import { consumeRequest, publicUser, query, saveReading, transaction, upsertUser } from "./db.js";
+import { botApi, signSession, startKeyboard, termsKeyboard, validateInitData, verifySession } from "./telegram.js";
+import { acceptTerms, consumeRequest, publicUser, query, saveReading, transaction, upsertUser } from "./db.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -19,6 +19,12 @@ function auth(req,res,next) {
   if (!session?.userId) return res.status(401).json({error:"unauthorized",message:"Откройте приложение внутри Telegram"});
   req.session = session; next();
 }
+async function accepted(req,res,next) {
+  const user=await publicUser(req.session.userId);
+  if(!user?.termsAccepted) return res.status(403).json({error:"terms_required",message:"Примите условия, чтобы продолжить"});
+  req.user=user; next();
+}
+const protectedRoute=[auth,asyncRoute(accepted)];
 
 app.get("/health",asyncRoute(async(req,res)=>{
   await query("SELECT 1");
@@ -38,13 +44,14 @@ app.post("/api/auth/dev",asyncRoute(async(req,res)=>{
 }));
 
 app.get("/api/me",auth,asyncRoute(async(req,res)=>res.json(await publicUser(req.session.userId))));
-app.post("/api/me/reminder",auth,asyncRoute(async(req,res)=>{
+app.post("/api/me/accept-terms",auth,asyncRoute(async(req,res)=>res.json(await acceptTerms(req.session.userId))));
+app.post("/api/me/reminder",...protectedRoute,asyncRoute(async(req,res)=>{
   const enabled=Boolean(req.body.enabled);
   await query("UPDATE users SET reminder_enabled=$2 WHERE id=$1",[req.session.userId,enabled]);
   res.json({enabled});
 }));
 
-app.get("/api/daily",auth,asyncRoute(async(req,res)=>{
+app.get("/api/daily",...protectedRoute,asyncRoute(async(req,res)=>{
   const existing=await query(`SELECT r.result FROM daily_cards d JOIN readings r ON r.id=d.reading_id
     WHERE d.user_id=$1 AND d.card_date=current_date`,[req.session.userId]);
   if(existing.rowCount) return res.json(existing.rows[0].result);
@@ -61,7 +68,7 @@ const validators={
   compatibility:b=>["firstName","firstBirthDate","secondName","secondBirthDate","relationship"].every(k=>String(b[k]||"").trim()),
   dream:b=>typeof b.dream==="string"&&b.dream.trim().length>=10,
 };
-app.post("/api/readings/:kind",auth,asyncRoute(async(req,res)=>{
+app.post("/api/readings/:kind",...protectedRoute,asyncRoute(async(req,res)=>{
   const kind=req.params.kind;
   if(!validators[kind]?.(req.body)) return res.status(400).json({error:"invalid_input",message:"Проверьте заполненные поля"});
   if(kind==="tarot" && ["3","7"].includes(String(req.body.cards))) {
@@ -75,14 +82,14 @@ app.post("/api/readings/:kind",auth,asyncRoute(async(req,res)=>{
   res.json(result);
 }));
 
-app.get("/api/history",auth,asyncRoute(async(req,res)=>{
+app.get("/api/history",...protectedRoute,asyncRoute(async(req,res)=>{
   const {rows}=await query(`SELECT id,kind,title,result->>'text' preview,favorite,created_at FROM readings
     WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50`,[req.session.userId]);
   const icons={daily:"✦",oracle:"◐",tarot:"♢",compatibility:"∞",dream:"☾"};
   res.json({items:rows.map(r=>({id:r.id,kind:r.kind,title:r.title,preview:r.preview?.slice(0,180),favorite:r.favorite,createdAt:r.created_at,icon:icons[r.kind]}))});
 }));
 
-app.post("/api/history/:id/favorite",auth,asyncRoute(async(req,res)=>{
+app.post("/api/history/:id/favorite",...protectedRoute,asyncRoute(async(req,res)=>{
   const {rows}=await query("UPDATE readings SET favorite=NOT favorite WHERE id=$1 AND user_id=$2 RETURNING favorite",[req.params.id,req.session.userId]);
   if(!rows[0]) return res.status(404).json({error:"not_found"});
   res.json(rows[0]);
@@ -92,7 +99,7 @@ const products={
   premium_week:{title:"Premium на 7 дней",description:"Безлимитные практики и расширенные расклады на неделю",stars:config.premiumWeekStars},
   extra_requests:{title:"10 дополнительных запросов",description:"Десять практик сверх дневного лимита",stars:config.extraRequestsStars},
 };
-app.post("/api/payments/invoice",auth,asyncRoute(async(req,res)=>{
+app.post("/api/payments/invoice",...protectedRoute,asyncRoute(async(req,res)=>{
   const product=products[req.body.product];
   if(!product) return res.status(400).json({error:"unknown_product"});
   const payload=`${req.body.product}:${req.session.userId}:${Date.now()}`;
@@ -102,7 +109,7 @@ app.post("/api/payments/invoice",auth,asyncRoute(async(req,res)=>{
   res.json({invoiceLink});
 }));
 
-app.get("/api/admin/stats",auth,asyncRoute(async(req,res)=>{
+app.get("/api/admin/stats",...protectedRoute,asyncRoute(async(req,res)=>{
   if(!config.adminIds.has(req.session.telegramId)) return res.status(403).json({error:"forbidden"});
   const {rows}=await query(`SELECT
     (SELECT count(*)::int FROM users) users,
@@ -134,6 +141,16 @@ app.post("/internal/reminders",asyncRoute(async(req,res)=>{
 app.post("/telegram/webhook",asyncRoute(async(req,res)=>{
   if(config.webhookSecret && req.headers["x-telegram-bot-api-secret-token"]!==config.webhookSecret) return res.sendStatus(401);
   const update=req.body;
+  const callback=update.callback_query;
+  if(callback?.data==="accept_terms_v1") {
+    const user=await upsertUser(callback.from,null);
+    await acceptTerms(user.id);
+    await botApi("answerCallbackQuery",{callback_query_id:callback.id,text:"Готово — условия приняты ✨"});
+    const name=String(callback.from.first_name||"Путник").replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+    const caption=`✨ <b>${name}, добро пожаловать.</b>\n\nМадам Агриппина готова открыть для вас символы, которые помогут взглянуть на ситуацию иначе.\n\nВас уже ждут <b>3 бесплатных запроса</b>, карта дня, Таро, совместимость и толкование снов.\n\nНажмите кнопку ниже — начнём.`;
+    if(callback.message?.photo) await botApi("editMessageCaption",{chat_id:callback.message.chat.id,message_id:callback.message.message_id,caption,parse_mode:"HTML",reply_markup:startKeyboard()});
+    else await botApi("sendMessage",{chat_id:callback.message.chat.id,text:caption,parse_mode:"HTML",reply_markup:startKeyboard()});
+  }
   if(update.pre_checkout_query) await botApi("answerPreCheckoutQuery",{pre_checkout_query_id:update.pre_checkout_query.id,ok:true});
   const payment=update.message?.successful_payment;
   if(payment?.currency==="XTR") {
@@ -151,14 +168,20 @@ app.post("/telegram/webhook",asyncRoute(async(req,res)=>{
   if(message?.text?.startsWith("/start")) {
     const start=message.text.split(" ")[1]||"";
     const url=start?`${config.publicUrl}?startapp=${encodeURIComponent(start)}`:config.publicUrl;
-    const keyboard=startKeyboard(); keyboard.inline_keyboard[0][0].web_app.url=url;
-    await botApi("sendMessage",{chat_id:message.chat.id,text:"Я — Мадам Агриппина ✦\n\nЗдесь нет неизбежных пророчеств — только символы, вопросы и новый взгляд на то, что уже живёт внутри вас.",reply_markup:keyboard});
+    const user=await upsertUser(message.from,start);
+    if(user.terms_accepted_at) {
+      await botApi("sendPhoto",{chat_id:message.chat.id,photo:`${config.publicUrl}/assets/madam-agrippina-avatar.png`,caption:"✦ <b>Мадам Агриппина ждёт вас.</b>\n\nКарта дня, Таро, совместимость и толкование снов — в одном мистическом пространстве.",parse_mode:"HTML",reply_markup:startKeyboard(url)});
+    } else {
+      const caption=`🔮 <b>Мадам Агриппина AI</b>\n\nДобро пожаловать туда, где символы помогают услышать себя.\n\n✦ Персональная карта дня\n♢ Расклады Таро\n∞ Совместимость пары\n☾ Толкование снов\n◐ Ответы Оракула\n\n<b>Перед началом</b> подтвердите согласие с условиями. Сервис предназначен для развлечения и саморефлексии, не заменяет медицинские, юридические или финансовые рекомендации. 18+`;
+      await botApi("sendPhoto",{chat_id:message.chat.id,photo:`${config.publicUrl}/assets/madam-agrippina-avatar.png`,caption,parse_mode:"HTML",reply_markup:termsKeyboard()});
+    }
   }
   res.json({ok:true});
 }));
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 app.use(express.static(path.join(root,"dist"),{maxAge:"1h"}));
+app.get("/terms",(req,res)=>res.sendFile(path.join(root,"dist","terms.html")));
 app.get("*",(req,res,next)=>req.path.startsWith("/api/")||req.path.startsWith("/telegram/")?next():res.sendFile(path.join(root,"dist","index.html")));
 
 app.use((error,req,res,next)=>{

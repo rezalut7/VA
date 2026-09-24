@@ -5,6 +5,7 @@ import "./styles.css";
 import "./cards.css";
 import "./card-art.css";
 import "./brand.css";
+import "./consent.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode><App /></React.StrictMode>

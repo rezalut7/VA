@@ -8,6 +8,9 @@ export const db = new Pool({
   max: 10,
 });
 
+await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at timestamptz`);
+await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version text`);
+
 export async function query(text, params = []) {
   return db.query(text, params);
 }
@@ -72,7 +75,13 @@ export async function publicUser(userId) {
     referralCode:u.referral_code, referrals:u.referrals, totalReadings:u.total_readings,
     premiumUntil:u.premium_until, requestsLeft:left, isAdmin:config.adminIds.has(u.telegram_id),
     reminderEnabled:u.reminder_enabled,
+    termsAccepted:Boolean(u.terms_accepted_at), termsVersion:u.terms_version,
   };
+}
+
+export async function acceptTerms(userId, version = "1") {
+  await query(`UPDATE users SET terms_accepted_at=now(), terms_version=$2 WHERE id=$1`,[userId,version]);
+  return publicUser(userId);
 }
 
 export async function consumeRequest(userId) {

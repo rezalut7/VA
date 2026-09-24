@@ -8,7 +8,7 @@ const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET || "";
 const originWebhookUrl = process.env.ORIGIN_WEBHOOK_URL || "";
 const miniAppUrl = process.env.MINI_APP_URL || "";
 const publicUrl = (process.env.RENDER_EXTERNAL_URL || process.env.PUBLIC_URL || "").replace(/\/$/, "");
-const allowedMethods = new Set(["answerPreCheckoutQuery", "createInvoiceLink", "sendMessage"]);
+const allowedMethods = new Set(["answerCallbackQuery", "answerPreCheckoutQuery", "createInvoiceLink", "editMessageCaption", "sendMessage", "sendPhoto"]);
 let setupState = "pending";
 
 function safeEqual(a,b) {
@@ -47,11 +47,20 @@ async function setupTelegram() {
     setupState="missing_config";
     return;
   }
-  const webhook=await telegram("setWebhook",{url:`${publicUrl}/telegram/webhook`,secret_token:webhookSecret,allowed_updates:["message","pre_checkout_query"]});
+  const webhook=await telegram("setWebhook",{url:`${publicUrl}/telegram/webhook`,secret_token:webhookSecret,allowed_updates:["message","callback_query","pre_checkout_query"]});
   if(webhook.status>=400) throw new Error(`setWebhook failed: ${webhook.status}`);
   const menu=await telegram("setChatMenuButton",{menu_button:{type:"web_app",text:"Открыть Агриппину ✦",web_app:{url:miniAppUrl}}});
   if(menu.status>=400) throw new Error(`setChatMenuButton failed: ${menu.status}`);
-  await telegram("setMyCommands",{commands:[{command:"start",description:"Открыть Мадам Агриппину"}]});
+  const profile=[
+    ["setMyCommands",{commands:[{command:"start",description:"Открыть Мадам Агриппину"}]}],
+    ["setMyName",{name:"Мадам Агриппина | Оракул AI"}],
+    ["setMyShortDescription",{short_description:"Таро, карта дня, совместимость и толкование снов ✦"}],
+    ["setMyDescription",{description:"🔮 Ваш персональный Оракул AI\n\nКарта дня, расклады Таро, совместимость, толкование снов и бережные ответы на важные вопросы. Загляните внутрь себя — ответ уже рядом. ✦"}],
+  ];
+  for(const [method,payload] of profile) {
+    const result=await telegram(method,payload);
+    if(result.status>=400) throw new Error(`${method} failed: ${result.status}`);
+  }
   setupState="ready";
 }
 
