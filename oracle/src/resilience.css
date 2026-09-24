@@ -1,0 +1,6 @@
+.splash .retry-connection{width:min(320px,calc(100vw - 48px));margin:18px auto 0}
+.splash .connection-note{max-width:330px;margin:10px auto 0;line-height:1.5}
+.fatal-recovery{padding:32px}
+.fatal-recovery .recovery-sigil{font-size:64px;color:#e6bf73;text-shadow:0 0 40px #d0953f}
+.fatal-recovery p{max-width:330px;margin:10px auto 22px;line-height:1.55}
+.fatal-recovery .primary{width:min(330px,100%);margin:auto}

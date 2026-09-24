@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, authenticate, share } from "./api.js";
 
 const modes = [
@@ -70,10 +70,31 @@ export default function App() {
   const [promoMessage, setPromoMessage] = useState("");
   const [storyAssets, setStoryAssets] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [slowBoot, setSlowBoot] = useState(false);
+  const [bootAttempt, setBootAttempt] = useState(0);
   const [error, setError] = useState("");
   const greeting = useMemo(()=>new Date().getHours()<12?'Доброе утро':new Date().getHours()<18?'Добрый день':'Добрый вечер',[]);
 
-  useEffect(()=>{ authenticate().then(setUser).catch(e=>setError(e.message)).finally(()=>setLoading(false)); },[]);
+  const retryConnection=useCallback(()=>{
+    setError("");
+    setSlowBoot(false);
+    setLoading(true);
+    setBootAttempt(value=>value+1);
+  },[]);
+
+  useEffect(()=>{
+    let active=true;
+    const slowTimer=setTimeout(()=>{ if(active) setSlowBoot(true); },4000);
+    authenticate().then(value=>{ if(active) setUser(value); }).catch(e=>{ if(active) setError(e.message); }).finally(()=>{ if(active) setLoading(false); });
+    return ()=>{ active=false; clearTimeout(slowTimer); };
+  },[bootAttempt]);
+  useEffect(()=>{
+    const reconnect=()=>{ if(!user) retryConnection(); };
+    const visible=()=>{ if(document.visibilityState==='visible'&&!user&&error) retryConnection(); };
+    window.addEventListener('online',reconnect);
+    document.addEventListener('visibilitychange',visible);
+    return ()=>{ window.removeEventListener('online',reconnect); document.removeEventListener('visibilitychange',visible); };
+  },[user,error,retryConnection]);
   useEffect(()=>{ if(page==='history') api('/api/history').then(r=>setHistory(r.items)).catch(e=>setError(e.message)); if(page==='profile'&&user?.isAdmin) api('/api/admin/stats').then(setAdminStats).catch(()=>{}); },[page,user?.isAdmin]);
   useEffect(()=>{
     setStoryAssets(null);
@@ -166,9 +187,9 @@ export default function App() {
     } catch(e) { setError(e.message); }
   }
 
-  if (loading && !user) return <main className="splash"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><h1>Мадам Агриппина</h1><p>Слушаю тишину между звёздами…</p></main>;
+  if (loading && !user) return <main className="splash"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><h1>Мадам Агриппина</h1><p className="connection-note">{slowBoot?'Соединение нестабильно — пробую другой маршрут…':'Слушаю тишину между звёздами…'}</p>{slowBoot&&<button className="primary retry-connection" onClick={retryConnection}>Повторить подключение</button>}</main>;
 
-  if(!user) return <main className="splash consent-screen"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><p className="eyebrow">Нужен Telegram</p><h1>Откройте Агриппину в боте</h1><p>{error||'Не удалось подтвердить запуск Mini App.'}</p><button className="primary" onClick={()=>location.reload()}>Попробовать снова ✦</button></main>;
+  if(!user) return <main className="splash consent-screen"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><p className="eyebrow">Восстановление связи</p><h1>Агриппина рядом</h1><p>{error||'Не удалось подтвердить запуск Mini App.'}</p><button className="primary" onClick={retryConnection}>Повторить подключение ✦</button><small>Переключать VPN или прокси не требуется.</small></main>;
 
   if(!user.termsAccepted) return <main className="splash consent-screen"><img className="brand-portrait" src="/assets/madam-agrippina-avatar.webp" alt="Мадам Агриппина"/><p className="eyebrow">Первое знакомство</p><h1>Добро пожаловать</h1><p>Нажимая кнопку ниже, вы соглашаетесь с условиями сервиса. Мадам Агриппина использует символы и образы для развлечения и саморефлексии. Сервис 18+.</p>{error&&<div className="consent-error">{error}</div>}<button className="primary consent-accept" disabled={loading} onClick={acceptConditions}>{loading?'Принимаю условия…':'Принять условия и продолжить ✦'}</button><a className="terms-link" href="/terms" target="_blank" rel="noreferrer">Прочитать условия и политику конфиденциальности</a><small>Сервис не заменяет медицинские, юридические или финансовые рекомендации.</small></main>;
 

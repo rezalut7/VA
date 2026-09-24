@@ -6,10 +6,11 @@
     <meta name="theme-color" content="#120d24" />
     <meta name="description" content="Мадам Агриппина AI — пространство для саморефлексии, карт и символов." />
     <title>Мадам Агриппина AI</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script async src="https://telegram.org/js/telegram-web-app.js" referrerpolicy="no-referrer"
+      onload="window.Telegram?.WebApp?.ready?.();window.dispatchEvent(new Event('telegram-sdk-ready'))"></script>
   </body>
 </html>
