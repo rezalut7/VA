@@ -1,0 +1,13 @@
+{
+  "name": "madam-agrippina-telegram-relay",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "check": "node --check index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
