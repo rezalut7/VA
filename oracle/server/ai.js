@@ -75,18 +75,22 @@ async function requestOllama(body) {
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),45000);
   try {
-    const fields=body.text?.format?.name==="agrippina_follow_up"
-      ? 'Верни JSON строго вида {"answer":"текст"}.'
-      : 'Верни JSON с ключами title, verdict, text, hidden, action, reflection, cards (массив строк), score (число или null).';
+    const isFollowUp=body.text?.format?.name==="agrippina_follow_up";
+    const localSystem=isFollowUp
+      ? "Ты Мадам Агриппина. Кратко продолжи личный разговор по-русски, опираясь на конкретные детали. Без фатальных обещаний."
+      : "Ты Мадам Агриппина — проницательная русская гадалка и психологический наблюдатель. Дай прямой ответ, назови две конкретные детали вопроса, объясни скрытую динамику и предложи один шаг на 24–72 часа. Без фатальных обещаний и общих фраз.";
+    const fields=isFollowUp
+      ? 'Верни JSON строго вида {"answer":"60–90 слов"}.'
+      : 'Верни JSON только с ключами verdict (одно предложение), text (60–90 слов), hidden (одно предложение), action (одно предложение).';
     const response=await fetch(`${config.ollamaUrl}/api/chat`,{
       method:"POST",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
         model:config.ollamaModel,
         stream:false,
-        messages:[{role:"system",content:body.instructions},{role:"user",content:`${body.input}\n\n${fields}`}],
+        messages:[{role:"system",content:localSystem},{role:"user",content:`${body.input}\n\n${fields}`}],
         format:"json",
-        options:{temperature:0.68,num_predict:Math.min(body.max_output_tokens||280,280),num_ctx:2048},
+        options:{temperature:0.68,num_predict:isFollowUp?140:220,num_ctx:1536},
         keep_alive:"30m",
       }),
       signal:controller.signal,
@@ -145,7 +149,8 @@ export async function createReading(kind,input,context={}) {
     const data=await requestModel({model:config.openaiModel,reasoning:{effort:"low"},instructions:system,input:readingPrompt(kind,input,context),max_output_tokens:1800,text:{format:readingFormat}});
     if(!data) return localReading(kind,input);
     const parsed=JSON.parse(extract(data));
-    return {...parsed,title:String(parsed.title).slice(0,160),cards:Array.isArray(parsed.cards)?parsed.cards.slice(0,7):[],score:Number.isInteger(parsed.score)?parsed.score:null};
+    const base=localReading(kind,input);
+    return {...base,...parsed,title:String(parsed.title||base.title).slice(0,160),cards:Array.isArray(parsed.cards)?parsed.cards.slice(0,7):base.cards,score:Number.isInteger(parsed.score)?parsed.score:base.score};
   } catch(error) {
     console.error("AI reading fallback:",error.message);
     return localReading(kind,input);
