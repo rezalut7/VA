@@ -38,8 +38,12 @@ export function verifySession(value) {
 
 export async function botApi(method, payload) {
   if (!config.botToken) throw new Error("TELEGRAM_BOT_TOKEN is not configured");
-  const response = await fetch(`https://api.telegram.org/bot${config.botToken}/${method}`,{
-    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),
+  const relayed = Boolean(config.telegramRelayUrl && config.telegramRelaySecret);
+  const url = relayed ? `${config.telegramRelayUrl}/api/${method}` : `https://api.telegram.org/bot${config.botToken}/${method}`;
+  const headers = {"Content-Type":"application/json"};
+  if (relayed) headers["x-relay-secret"] = config.telegramRelaySecret;
+  const response = await fetch(url,{
+    method:"POST",headers,body:JSON.stringify(payload),
   });
   const data = await response.json();
   if (!data.ok) throw new Error(`Telegram ${method}: ${data.description || response.status}`);
